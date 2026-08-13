@@ -1,0 +1,29 @@
+{
+  "name": "upterindo",
+  "version": "2.0.0",
+  "description": "UPterindo — platform manajemen budidaya pertanian oleh Terindo Group (backend Express + penyimpanan data JSON).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "nodemailer": "^9.0.5",
+    "session-file-store": "^1.5.0"
+  },
+  "keywords": [
+    "agriculture",
+    "budidaya",
+    "farm-management",
+    "terindo"
+  ],
+  "author": "Terindo Group (PT Tetra Jaya Plusindo)",
+  "license": "UNLICENSED",
+  "private": true
+}
