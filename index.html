@@ -210,12 +210,12 @@
       </div>
       <div class="hidden items-center gap-2" id="user-chip">
         <button class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/20 text-green-100" onclick="openSettings()">⚙<span class="hidden sm:inline"> Status AI </span><span id="ai-status-pill" class="hidden sm:inline" style="color:#fde68a;">○ AI Simulasi</span></button>
-        <div id="user-avatar" style="width:28px;height:28px;border-radius:999px;background:var(--green-600);color:white;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
-        <div class="leading-tight hidden sm:block clickable" onclick="openChangePasswordForm()" title="Ganti kata sandi">
+        <div id="user-avatar" class="clickable" style="width:28px;height:28px;border-radius:999px;background:var(--green-600);color:white;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" onclick="openMyProfileForm()" title="Profil saya"></div>
+        <div class="leading-tight hidden sm:block clickable" onclick="openMyProfileForm()" title="Profil saya">
           <p id="user-name" class="text-white text-[12px] font-bold"></p>
           <p id="user-role" class="text-green-200/70 text-[10px]"></p>
         </div>
-        <button class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/20 text-green-100" onclick="openChangePasswordForm()" title="Ganti kata sandi">🔑</button>
+        <button class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/20 text-green-100" onclick="openMyProfileForm()" title="Profil &amp; ganti kata sandi">👤</button>
         <button class="ml-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/20 text-green-100" onclick="logout()">Keluar</button>
       </div>
     </div>
@@ -394,15 +394,15 @@
           <div class="grid grid-cols-3 gap-2 mb-3">
             <label class="upload-box" style="cursor:pointer; overflow:hidden; padding:0;" id="photo-slot-closeup">
               <span>+ Foto dekat</span>
-              <input type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload(event,'closeup')">
+              <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event,'closeup')">
             </label>
             <label class="upload-box" style="cursor:pointer; overflow:hidden; padding:0;" id="photo-slot-leaf">
               <span>+ Daun atas</span>
-              <input type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload(event,'leaf')">
+              <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event,'leaf')">
             </label>
             <label class="upload-box" style="cursor:pointer; overflow:hidden; padding:0;" id="photo-slot-area">
               <span>+ Foto area</span>
-              <input type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload(event,'area')">
+              <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event,'area')">
             </label>
           </div>
 
@@ -582,7 +582,29 @@
       <div class="screen" data-s="kanban">
         <div class="flex justify-between items-center mb-4">
           <h1 class="text-lg font-extrabold text-gray-900">Papan Tugas</h1>
-          <span class="text-[12px] text-gray-500">Klik kartu untuk detail</span>
+          <button class="px-4 py-2 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toggleAssignTaskForm()">+ Buat &amp; Tugaskan</button>
+        </div>
+        <div class="card p-4 mb-4 hidden" id="assign-task-form">
+          <p class="font-bold text-[13px] text-gray-800 mb-3">Tugaskan Pekerjaan Baru</p>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Aktivitas</label><input type="text" id="wo-act" placeholder="mis. Treatment Ulat Grayak"></div>
+            <div><label class="field-label">Tugaskan ke</label><select id="wo-assignee"><option value="">— Pilih pekerja —</option></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Crop Cycle / Plot</label><select id="wo-cropcycle" onchange="onWoCropCycleChange()"><option value="">— Pilih crop cycle —</option></select></div>
+            <div><label class="field-label">Tanggal</label><input type="date" id="wo-date"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <div><label class="field-label">Jumlah pekerja rencana</label><input type="number" id="wo-workers" value="1" min="1"></div>
+            <div><label class="field-label">Area rencana</label><input type="text" id="wo-area" placeholder="mis. 0.8 ha"></div>
+            <div><label class="field-label">Bahan rencana</label><input type="text" id="wo-materials" placeholder="mis. NPK 16-16-16 35kg"></div>
+          </div>
+          <label class="field-label mb-1">Checklist SOP (satu per baris, opsional — bisa disalin dari SOP terkait)</label>
+          <textarea rows="3" id="wo-sop" class="mb-3" placeholder="Periksa APD lengkap&#10;Siapkan bahan sesuai rencana&#10;Aplikasi / pelaksanaan lapangan&#10;Dokumentasi foto"></textarea>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveAssignTask()">Tugaskan</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toggleAssignTaskForm()">Batal</button>
+          </div>
         </div>
         <div class="flex gap-3" id="s-kanban-board"></div>
       </div>
@@ -736,37 +758,38 @@
 
       <div class="screen" data-a="treatment">
         <h1 class="text-lg font-extrabold text-gray-900 mb-1">Treatment Planner</h1>
-        <p class="text-[12px] text-gray-500 mb-3">Sumber: Observation OBS-2291 — Blok A3, Cabai, 32 HST</p>
-
-        <div class="card p-3 mb-3" style="background:var(--red-100); border-color:#fecaca;">
-          <p class="text-[12.5px] font-bold text-red-700">⚠ Validasi sistem</p>
-          <p class="text-[11.5px] text-red-600 mt-0.5">PHI (Pre-Harvest Interval) belum terpenuhi untuk aplikasi sebelumnya di Blok A3. Estimasi panen dalam 5 hari — pilih produk dengan PHI ≤ 5 hari.</p>
-        </div>
+        <p class="text-[12px] text-gray-500 mb-3">Buat rekomendasi treatment berdasarkan diagnosis lapangan/laporan masalah, lalu setujui langsung untuk membuat tugas kerja bagi pekerja.</p>
 
         <div class="grid grid-cols-2 gap-3 mb-3">
-          <div><label class="field-label">Diagnosis</label><input type="text" value="Ulat grayak (Spodoptera frugiperda)" readonly></div>
-          <div><label class="field-label">Confidence AI</label><input type="text" value="78% — dikonfirmasi agronomis" readonly></div>
+          <div><label class="field-label">Crop Cycle / Plot</label><select id="atr-cropcycle"><option value="">— Pilih crop cycle —</option></select></div>
+          <div><label class="field-label">Diagnosis / alasan treatment</label><input type="text" id="atr-diagnosis" placeholder="mis. Ulat grayak (Spodoptera frugiperda)"></div>
         </div>
         <div class="grid grid-cols-2 gap-3 mb-3">
-          <div><label class="field-label">Produk</label><select><option>Emamektin Benzoat 5WG</option><option>Klorantraniliprol 200SC</option><option>Beauveria bassiana (biologis)</option></select></div>
-          <div><label class="field-label">Mode of action</label><input type="text" value="Grup 28 — belum dipakai 30 hari terakhir" readonly></div>
+          <div><label class="field-label">Produk</label><select id="atr-product" onchange="onAtrProductChange()"><option value="">— Pilih produk —</option></select></div>
+          <div><label class="field-label">Mode of action</label><input type="text" id="atr-moa" readonly></div>
+        </div>
+        <div id="atr-validation" class="hidden card p-3 mb-3" style="background:var(--red-100); border-color:#fecaca;">
+          <p class="text-[12.5px] font-bold text-red-700">⚠ Perhatian</p>
+          <p class="text-[11.5px] text-red-600 mt-0.5" id="atr-validation-text"></p>
         </div>
         <div class="grid grid-cols-3 gap-3 mb-3">
-          <div><label class="field-label">Dosis</label><input type="text" value="0.5 g/L"></div>
-          <div><label class="field-label">Luas aplikasi</label><input type="text" value="0.8 ha"></div>
-          <div><label class="field-label">Volume semprot</label><input type="text" value="400 L"></div>
+          <div><label class="field-label">Dosis</label><input type="text" id="atr-dosis"></div>
+          <div><label class="field-label">Luas aplikasi</label><input type="text" id="atr-luas" placeholder="mis. 0.8 ha"></div>
+          <div><label class="field-label">Volume semprot</label><input type="text" id="atr-volume" placeholder="mis. 400 L"></div>
         </div>
         <div class="grid grid-cols-3 gap-3 mb-3">
-          <div><label class="field-label">PHI</label><input type="text" value="3 hari" readonly></div>
-          <div><label class="field-label">REI</label><input type="text" value="12 jam" readonly></div>
-          <div><label class="field-label">PPE wajib</label><input type="text" value="Masker, sarung tangan" readonly></div>
+          <div><label class="field-label">PHI</label><input type="text" id="atr-phi" readonly></div>
+          <div><label class="field-label">REI</label><input type="text" id="atr-rei" readonly></div>
+          <div><label class="field-label">PPE wajib</label><input type="text" id="atr-ppe" readonly></div>
         </div>
-        <label class="field-label">Jadwal reinspection</label>
-        <input type="date" value="2026-08-16" class="mb-4">
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div><label class="field-label">Tugaskan ke pekerja</label><select id="atr-assignee"><option value="">— Pilih pekerja —</option></select></div>
+          <div><label class="field-label">Jadwal pelaksanaan</label><input type="date" id="atr-date"></div>
+        </div>
 
         <div class="flex gap-2">
-          <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="toast('Treatment disetujui dan work order dibuat')">Setujui &amp; Buat Work Order</button>
-          <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toast('Rekomendasi dikirim untuk revisi')">Minta Revisi</button>
+          <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="approveTreatmentAndAssign()">Setujui &amp; Buat Work Order</button>
+          <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="document.getElementById('atr-diagnosis').value='';document.getElementById('atr-cropcycle').value='';document.getElementById('atr-product').value='';toast('Form dikosongkan')">Bersihkan Form</button>
         </div>
 
         <hr class="my-6" style="border-color:#e6e9e7;">
@@ -970,104 +993,85 @@
 
       <div class="screen" data-h="penerimaan">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Penerimaan Barang</h1>
-        <div class="grid grid-cols-2 gap-3 mb-3">
-          <div><label class="field-label">Purchase Order</label><select><option>PO-2026-0114 — CV Tani Makmur</option><option>PO-2026-0115 — UD Sumber Subur</option></select></div>
-          <div><label class="field-label">Gudang tujuan</label><select><option>Gudang Utama</option><option>Gudang Kebun Cianjur</option></select></div>
-        </div>
         <div class="grid grid-cols-3 gap-3 mb-3">
-          <div><label class="field-label">Item</label><input type="text" value="Emamektin Benzoat 5WG"></div>
-          <div><label class="field-label">Quantity diterima</label><input type="number" value="10"></div>
-          <div><label class="field-label">Satuan</label><input type="text" value="kg"></div>
+          <div><label class="field-label">Barang</label><select id="rcv-item"><option value="">— Pilih barang —</option></select></div>
+          <div><label class="field-label">Quantity diterima</label><input type="number" id="rcv-qty" min="0" step="any"></div>
+          <div><label class="field-label">No. PO (opsional)</label><input type="text" id="rcv-po" placeholder="mis. PO-2026-0114"></div>
         </div>
         <div class="grid grid-cols-3 gap-3 mb-4">
-          <div><label class="field-label">No. Batch</label><input type="text" value="EMB-260712-A"></div>
-          <div><label class="field-label">Tanggal kedaluwarsa</label><input type="date" value="2027-07-12"></div>
-          <div><label class="field-label">Kondisi</label><select><option>Baik</option><option>Rusak sebagian</option></select></div>
+          <div><label class="field-label">No. Batch</label><input type="text" id="rcv-batch" placeholder="opsional"></div>
+          <div><label class="field-label">Tanggal kedaluwarsa</label><input type="date" id="rcv-expiry"></div>
+          <div><label class="field-label">Kondisi</label><select id="rcv-condition"><option>Baik</option><option>Rusak sebagian</option></select></div>
         </div>
-        <button class="py-2.5 px-5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="toast('Penerimaan barang tercatat')">Simpan Penerimaan</button>
+        <button class="py-2.5 px-5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveStockReceive()">Simpan Penerimaan</button>
 
         <p class="font-bold text-[13px] text-gray-800 mt-6 mb-2">Riwayat penerimaan terbaru</p>
         <table class="data-table"><thead><tr><th>Tanggal</th><th>Item</th><th>Qty</th><th>Batch</th><th>PO</th></tr></thead>
-        <tbody>
-          <tr><td>10 Agu 2026</td><td>NPK 16-16-16</td><td>200 kg</td><td>NPK-260805</td><td>PO-2026-0109</td></tr>
-          <tr><td>08 Agu 2026</td><td>Mulsa Plastik</td><td>1,000 m</td><td>MLS-260728</td><td>PO-2026-0106</td></tr>
-        </tbody></table>
+        <tbody id="rcv-history-body"></tbody></table>
       </div>
 
       <div class="screen" data-h="pengeluaran">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Pengeluaran Barang (Stock Issue)</h1>
         <div class="grid grid-cols-2 gap-3 mb-3">
-          <div><label class="field-label">Work Order / Treatment</label><select><option>WO-2026-3381 — Treatment Ulat Grayak, Blok A3</option></select></div>
-          <div><label class="field-label">Gudang</label><input type="text" value="Gudang Utama" readonly></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3 mb-3">
-          <div><label class="field-label">Item</label><input type="text" value="Emamektin Benzoat 5WG" readonly></div>
-          <div><label class="field-label">Batch disarankan (FEFO)</label><input type="text" value="EMB-260112-C — exp 12 Des 2026" readonly></div>
+          <div><label class="field-label">Work Order / Treatment (opsional)</label><select id="iss-wo"><option value="">— Tanpa referensi work order —</option></select></div>
+          <div><label class="field-label">Barang</label><select id="iss-item" onchange="onIssItemChange()"><option value="">— Pilih barang —</option></select></div>
         </div>
         <div class="grid grid-cols-3 gap-3 mb-3">
-          <div><label class="field-label">Qty diminta</label><input type="number" value="0.4"></div>
-          <div><label class="field-label">Qty dikeluarkan</label><input type="number" value="0.4"></div>
-          <div><label class="field-label">Satuan</label><input type="text" value="kg"></div>
+          <div><label class="field-label">Stok tersedia</label><input type="text" id="iss-stock" readonly></div>
+          <div><label class="field-label">Qty dikeluarkan</label><input type="number" id="iss-qty" min="0" step="any"></div>
+          <div><label class="field-label">No. Batch (opsional)</label><input type="text" id="iss-batch"></div>
         </div>
         <div class="grid grid-cols-2 gap-3 mb-3">
-          <div><label class="field-label">Penerima</label><input type="text" value="Budi Santoso — Regu Mawar"></div>
-          <div><label class="field-label">Alasan selisih (jika ada)</label><input type="text" placeholder="Tidak ada selisih"></div>
+          <div><label class="field-label">Penerima</label><input type="text" id="iss-recipient" placeholder="mis. Budi Pekerja — Regu Mawar"></div>
+          <div><label class="field-label">Alasan / catatan (jika ada selisih)</label><input type="text" id="iss-reason" placeholder="Tidak ada selisih"></div>
         </div>
-        <button class="py-2.5 px-5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="toast('Barang keluar tercatat, biaya masuk ke crop cycle')">Konfirmasi Pengeluaran</button>
+        <button class="py-2.5 px-5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveStockIssue()">Konfirmasi Pengeluaran</button>
+
+        <p class="font-bold text-[13px] text-gray-800 mt-6 mb-2">Riwayat pengeluaran terbaru</p>
+        <table class="data-table"><thead><tr><th>Tanggal</th><th>Item</th><th>Qty</th><th>Penerima</th><th>Work Order</th></tr></thead>
+        <tbody id="iss-history-body"></tbody></table>
       </div>
 
       <div class="screen" data-h="reservasi">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Reservasi Stok</h1>
-        <table class="data-table"><thead><tr><th>Treatment / WO</th><th>Item</th><th>Qty Direservasi</th><th>Batch</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>WO-2026-3381</td><td>Emamektin Benzoat 5WG</td><td>0.4 kg</td><td>EMB-260112-C</td><td><span class="badge b-blue">Direservasi</span></td></tr>
-          <tr><td>WO-2026-3379</td><td>NPK 16-16-16</td><td>35 kg</td><td>NPK-260805</td><td><span class="badge b-green">Terpenuhi</span></td></tr>
-          <tr><td>WO-2026-3375</td><td>Kapur Dolomit</td><td>120 kg</td><td>DOL-260701</td><td><span class="badge b-amber">Menunggu batch</span></td></tr>
-        </tbody></table>
+        <div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Fitur reservasi stok per work order belum tersedia — saat ini stok langsung dipotong lewat Pengeluaran Barang saat dikonfirmasi. Akan dikembangkan berikutnya jika dibutuhkan.</p></div>
       </div>
 
       <div class="screen" data-h="transfer">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Transfer Antargudang</h1>
-        <div class="grid grid-cols-2 gap-3 mb-4">
-          <div><label class="field-label">Dari gudang</label><select><option>Gudang Utama</option></select></div>
-          <div><label class="field-label">Ke gudang</label><select><option>Gudang Kebun Cianjur</option></select></div>
-        </div>
-        <table class="data-table"><thead><tr><th>Tanggal</th><th>Item</th><th>Qty</th><th>Dari</th><th>Ke</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>11 Agu 2026</td><td>NPK 16-16-16</td><td>50 kg</td><td>Gudang Utama</td><td>Gudang Cianjur</td><td><span class="badge b-green">Selesai</span></td></tr>
-          <tr><td>09 Agu 2026</td><td>Sprayer Manual</td><td>2 unit</td><td>Gudang Cianjur</td><td>Gudang Utama</td><td><span class="badge b-blue">Dalam perjalanan</span></td></tr>
-        </tbody></table>
+        <div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Saat ini sistem mengelola stok sebagai satu gudang tunggal (belum multi-gudang per lokasi). Fitur transfer antargudang akan dikembangkan jika Terindo Group butuh pemisahan stok per lokasi (Pabuaran/Parung).</p></div>
       </div>
 
       <div class="screen" data-h="count">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Stock Count / Cycle Count</h1>
-        <table class="data-table"><thead><tr><th>Item</th><th>Stok Sistem</th><th>Hasil Hitung</th><th>Selisih</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>Benih Melon MC-08</td><td>85 pack</td><td>85 pack</td><td>0</td><td><span class="badge b-green">Sesuai</span></td></tr>
-          <tr><td>Mankozeb 80WP</td><td>8 kg</td><td>7.2 kg</td><td>-0.8 kg</td><td><span class="badge b-amber">Perlu approval</span></td></tr>
-        </tbody></table>
+        <div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Fitur hitung fisik stok berkala belum tersedia. Stok sistem saat ini bisa dilihat langsung di menu Barang &amp; Inventaris.</p></div>
       </div>
 
       <div class="screen" data-h="batch">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Batch &amp; Expiry</h1>
-        <table class="data-table"><thead><tr><th>Item</th><th>Batch</th><th>Stok</th><th>Kedaluwarsa</th><th>FEFO</th></tr></thead>
-        <tbody>
-          <tr style="background:var(--red-100);"><td>Emamektin Benzoat 5WG</td><td>EMB-250901-B</td><td>0.6 kg</td><td>28 Agu 2026</td><td><span class="badge b-red">Keluarkan dulu</span></td></tr>
-          <tr><td>Emamektin Benzoat 5WG</td><td>EMB-260112-C</td><td>1.5 kg</td><td>12 Des 2026</td><td><span class="badge b-gray">Antre</span></td></tr>
-          <tr><td>NPK 16-16-16</td><td>NPK-260805</td><td>140 kg</td><td>05 Agu 2028</td><td><span class="badge b-gray">Antre</span></td></tr>
-        </tbody></table>
+        <p class="text-[12px] text-gray-500 mb-3">Daftar batch dari riwayat penerimaan barang, diurutkan FEFO (First Expired, First Out).</p>
+        <table class="data-table"><thead><tr><th>Item</th><th>Batch</th><th>Qty Diterima</th><th>Kedaluwarsa</th><th>Diterima</th></tr></thead>
+        <tbody id="batch-body"></tbody></table>
       </div>
 
       <div class="screen" data-h="pr">
         <div class="flex justify-between items-center mb-4">
           <h1 class="text-lg font-extrabold text-gray-900">Purchase Request</h1>
-          <button class="px-4 py-2 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toast('Purchase request baru dibuat dari kebutuhan crop cycle')">+ Buat PR</button>
+          <button class="px-4 py-2 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="togglePrForm()">+ Buat PR</button>
+        </div>
+        <div class="card p-4 mb-4 hidden" id="pr-form">
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <div><label class="field-label">Barang</label><select id="pr-item"><option value="">— Pilih barang —</option></select></div>
+            <div><label class="field-label">Qty diminta</label><input type="number" id="pr-qty" min="0" step="any"></div>
+            <div><label class="field-label">Catatan</label><input type="text" id="pr-note" placeholder="opsional"></div>
+          </div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="savePr()">Ajukan PR</button>
+            <button class="px-4 py-2 rounded-lg font-bold text-[12.5px] border border-gray-300 text-gray-600" onclick="togglePrForm()">Batal</button>
+          </div>
         </div>
         <table class="data-table"><thead><tr><th>No. PR</th><th>Item</th><th>Qty</th><th>Diminta oleh</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>PR-2026-0231</td><td>Mankozeb 80WP</td><td>25 kg</td><td>Agronomis — Rina</td><td><span class="badge b-amber">Menunggu approval</span></td></tr>
-          <tr><td>PR-2026-0229</td><td>Emamektin Benzoat 5WG</td><td>10 kg</td><td>Gudang — Dedi</td><td><span class="badge b-blue">Disetujui — dibuat PO</span></td></tr>
-        </tbody></table>
+        <tbody id="pr-body"></tbody></table>
       </div>
 
     </div>
@@ -1158,13 +1162,18 @@
 /* ===================== DATA (dimuat dari server) ===================== */
 /* Semua data modul disimpan di server (data/db.json) dan diambil lewat REST
  * API. Variabel di bawah ini diisi oleh loadAllData() setelah login. */
-let tasks = [], historyList = [], syncQueue = [], kanbanCols = [], incomingReports = [],
-    attendance = [], openIssues = [], approvalQueue = [], cropCycles = [], scoutingSessions = [],
+let workOrders = [], syncQueue = [], incomingReports = [],
+    attendance = [], cropCycles = [], scoutingSessions = [],
     sopList = [], problemDict = [], productDb = [], activeIngredients = [], compatGroups = [],
     compatMatrix = {}, itemMaster = [], treatmentList = [], dailyPlans = [], monthlyPlans = [],
     dailyReports = [], monthlyReports = [], greenReports = [], locations = [], harvestReports = [],
     activeLocationFilter = 'all';
 let currentUser = null;
+const WO_STATUS_LABEL = {assigned:'Ditugaskan', in_progress:'Dikerjakan', paused:'Dijeda', revision:'Perlu Revisi', submitted:'Menunggu Review', approved:'Disetujui', cancelled:'Dibatalkan'};
+const WO_STATUS_BADGE = {assigned:'b-blue', in_progress:'b-amber', paused:'b-gray', revision:'b-red', submitted:'b-blue', approved:'b-green', cancelled:'b-gray'};
+function myWorkOrders(){ return workOrders.filter(w => currentUser && w.assignedTo === currentUser.id); }
+function myActiveWorkOrders(){ return myWorkOrders().filter(w => ['assigned','in_progress','paused','revision'].includes(w.status)); }
+function myWorkOrderHistory(){ return myWorkOrders().filter(w => ['submitted','approved','cancelled'].includes(w.status)); }
 
 /* ===================== HELPER API ===================== */
 async function apiGet(p){
@@ -1193,28 +1202,29 @@ async function apiDelete(p){
 
 async function loadAllData(){
   const [
-    _tasks, _historyList, _syncQueue, _kanbanCols, _incomingReports, _attendance,
-    _openIssues, _approvalQueue, _cropCycles, _scoutingSessions, _sopList, _problemDict,
+    _workOrders, _syncQueue, _incomingReports, _attendance,
+    _cropCycles, _scoutingSessions, _sopList, _problemDict,
     _productDb, _activeIngredients, _compatGroups, _compatMatrix, _itemMaster, _treatmentList,
     _dailyPlans, _monthlyPlans, _dailyReports, _monthlyReports, _greenReports,
-    _locations, _harvestReports,
+    _locations, _harvestReports, _prList,
   ] = await Promise.all([
-    apiGet('/tasks'), apiGet('/historyList'), apiGet('/syncQueue'), apiGet('/kanbanCols'),
-    apiGet('/incomingReports'), apiGet('/attendance'), apiGet('/openIssues'), apiGet('/approvalQueue'),
+    apiGet('/workorders'), apiGet('/syncQueue'),
+    apiGet('/incomingReports'), apiGet('/attendance'),
     apiGet('/cropCycles'), apiGet('/scoutingSessions'), apiGet('/sopList'), apiGet('/problemDict'),
     apiGet('/productDb'), apiGet('/activeIngredients'), apiGet('/compatGroups'), apiGet('/compat-matrix'),
     apiGet('/itemMaster'), apiGet('/treatmentList'), apiGet('/dailyPlans'), apiGet('/monthlyPlans'),
     apiGet('/dailyReports'), apiGet('/monthlyReports'), apiGet('/greenReports'),
-    apiGet('/locations'), apiGet('/harvestReports'),
+    apiGet('/locations'), apiGet('/harvestReports'), apiGet('/purchaseRequests'),
   ]);
-  tasks = _tasks; historyList = _historyList; syncQueue = _syncQueue; kanbanCols = _kanbanCols;
-  incomingReports = _incomingReports; attendance = _attendance; openIssues = _openIssues;
-  approvalQueue = _approvalQueue; cropCycles = _cropCycles; scoutingSessions = _scoutingSessions;
+  workOrders = _workOrders; syncQueue = _syncQueue;
+  incomingReports = _incomingReports; attendance = _attendance;
+  cropCycles = _cropCycles; scoutingSessions = _scoutingSessions;
   sopList = _sopList; problemDict = _problemDict; productDb = _productDb;
   activeIngredients = _activeIngredients; compatGroups = _compatGroups; compatMatrix = _compatMatrix;
   itemMaster = _itemMaster; treatmentList = _treatmentList; dailyPlans = _dailyPlans;
   monthlyPlans = _monthlyPlans; dailyReports = _dailyReports; monthlyReports = _monthlyReports;
   greenReports = _greenReports; locations = _locations; harvestReports = _harvestReports;
+  prList = _prList;
 }
 
 function compatLookup(a,b){
@@ -1814,23 +1824,95 @@ function panelHeader(title, subtitle){
 }
 
 function openWorkOrder(id){
-  const wo = kanbanCols.flatMap(c=>c.items).find(i=>i.id===id) || tasks.find(t=>t.id===id) || {id, act:'Work order', plot:''};
+  const wo = workOrders.find(w=>w.id===id);
+  if(!wo){ toast('Tugas tidak ditemukan'); return; }
+  const photoHtml = wo.photos && Object.keys(wo.photos).length
+    ? `<div class="grid grid-cols-3 gap-2">${Object.entries(wo.photos).map(([k,v])=>`<div class="upload-box" style="background-image:url(${v});background-size:cover;background-position:center;"></div>`).join('')}</div>`
+    : `<p class="text-[11.5px] text-gray-400">Belum ada foto.</p>`;
+  const actionsHtml = wo.status==='submitted' ? `
+      <div class="flex gap-2 pt-2">
+        <button class="flex-1 py-2 rounded-lg font-bold text-white text-[12.5px]" style="background:var(--green-600);" onclick="reviewWorkOrder('${wo.id}','approve')">Approve</button>
+        <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] border border-gray-300" onclick="reviewWorkOrder('${wo.id}','revision')">Minta Revisi</button>
+      </div>` : `<p class="text-[11.5px] text-gray-400 pt-2">Status saat ini: ${WO_STATUS_LABEL[wo.status]||wo.status} — aksi approve/revisi hanya tersedia saat status "Menunggu Review".</p>`;
   openPanelHTML(panelHeader(wo.id, wo.act) + `
     <div class="p-5 text-[13px] space-y-3">
-      <div><p class="field-label">Plot / Crop Cycle</p><p class="font-semibold">${wo.plot}</p></div>
+      <div><p class="field-label">Status</p>${statusBadge(wo.status)}</div>
+      <div><p class="field-label">Plot / Crop Cycle</p><p class="font-semibold">${wo.plot}${wo.location?' · '+wo.location:''}</p></div>
       <div><p class="field-label">Aktivitas</p><p class="font-semibold">${wo.act}</p></div>
-      <div><p class="field-label">Pelaksana</p><p class="font-semibold">Regu Mawar — 3 orang</p></div>
-      <div><p class="field-label">Checklist SOP</p>
-        <div class="checklist-item"><input type="checkbox" checked><span>Periksa APD lengkap</span></div>
-        <div class="checklist-item"><input type="checkbox" checked><span>Siapkan bahan sesuai rencana</span></div>
-        <div class="checklist-item"><input type="checkbox"><span>Aplikasi / pelaksanaan lapangan</span></div>
-        <div class="checklist-item"><input type="checkbox"><span>Dokumentasi foto</span></div>
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button class="flex-1 py-2 rounded-lg font-bold text-white text-[12.5px]" style="background:var(--green-600);" onclick="toast('Laporan disetujui'); closePanel();">Approve</button>
-        <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] border border-gray-300" onclick="toast('Dikembalikan untuk revisi'); closePanel();">Revisi</button>
-      </div>
+      <div><p class="field-label">Pelaksana</p><p class="font-semibold">${wo.assignedToName}${wo.team&&wo.team!=='-'?' — '+wo.team:''}</p></div>
+      <div><p class="field-label">Rencana vs Aktual</p><p class="font-semibold">${wo.plannedWorkers||'-'} orang, ${wo.plannedArea||'-'} (rencana) — ${wo.actualWorkers??'-'} orang, ${wo.actualArea||'-'} (aktual)</p></div>
+      <div><p class="field-label">Bahan</p><p class="font-semibold">${wo.materialsActual || wo.materialsPlanned || '-'}</p></div>
+      ${wo.sop && wo.sop.length ? `<div><p class="field-label">Checklist SOP</p>${wo.sop.map((s,i)=>`<div class="checklist-item"><input type="checkbox" ${wo.sopChecked&&wo.sopChecked[i]?'checked':''} disabled><span>${s}</span></div>`).join('')}</div>` : ''}
+      ${wo.notes ? `<div><p class="field-label">Catatan pekerja</p><p class="font-semibold">${wo.notes}</p></div>` : ''}
+      <div><p class="field-label">Foto</p>${photoHtml}</div>
+      ${actionsHtml}
     </div>`);
+}
+async function reviewWorkOrder(id, action){
+  const revisionNote = action==='revision' ? prompt('Catatan revisi untuk pekerja (opsional):') || '' : undefined;
+  try{
+    const updated = await apiPut('/workorders/'+id, {action, revisionNote});
+    const idx = workOrders.findIndex(w=>w.id===id);
+    if(idx>=0) workOrders[idx] = updated;
+    toast(action==='approve' ? 'Tugas disetujui' : 'Dikembalikan untuk revisi');
+    closePanel();
+    renderSupervisor();
+  }catch(e){
+    toast('Gagal: ' + (e.message||'coba lagi'));
+  }
+}
+
+/* ===================== ASSIGN TUGAS (Supervisor/Agronomis) ===================== */
+let workersListCache = null;
+async function toggleAssignTaskForm(){
+  const form = document.getElementById('assign-task-form');
+  const opening = form.classList.contains('hidden');
+  form.classList.toggle('hidden');
+  if(opening){
+    if(!workersListCache){
+      try{ workersListCache = await apiGet('/workers'); }catch(e){ workersListCache = []; toast('Gagal memuat daftar pekerja: '+(e.message||'')); }
+    }
+    const assigneeSel = document.getElementById('wo-assignee');
+    assigneeSel.innerHTML = '<option value="">— Pilih pekerja —</option>' + workersListCache.map(w=>`<option value="${w.id}">${w.name}${w.team&&w.team!=='-'?' — '+w.team:''}</option>`).join('');
+    const ccSel = document.getElementById('wo-cropcycle');
+    ccSel.innerHTML = '<option value="">— Pilih crop cycle —</option>' + cropCycles.map(c=>`<option value="${c.id}">${c.id} — ${c.crop} (${c.plot}, ${c.location||'-'})</option>`).join('');
+    document.getElementById('wo-date').value = new Date().toISOString().slice(0,10);
+  }
+}
+function onWoCropCycleChange(){
+  const cc = cropCycles.find(c=>c.id===document.getElementById('wo-cropcycle').value);
+  if(!cc) return;
+  document.getElementById('wo-area').placeholder = cc.plot;
+}
+async function saveAssignTask(){
+  const act = document.getElementById('wo-act').value.trim();
+  const assignedTo = document.getElementById('wo-assignee').value;
+  if(!act || !assignedTo){ toast('Aktivitas dan pekerja wajib diisi'); return; }
+  const ccId = document.getElementById('wo-cropcycle').value;
+  const cc = cropCycles.find(c=>c.id===ccId);
+  const sop = document.getElementById('wo-sop').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const payload = {
+    act, assignedTo,
+    cropCycleId: ccId || null,
+    plot: cc ? cc.plot : '-',
+    location: cc ? cc.location : '-',
+    plannedWorkers: Number(document.getElementById('wo-workers').value) || 1,
+    plannedArea: document.getElementById('wo-area').value || (cc ? cc.plot : '-'),
+    materialsPlanned: document.getElementById('wo-materials').value || '-',
+    scheduledDate: document.getElementById('wo-date').value,
+    sop,
+  };
+  try{
+    const created = await apiPost('/workorders', payload);
+    workOrders.unshift(created);
+    ['wo-act','wo-materials'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('wo-sop').value='';
+    document.getElementById('assign-task-form').classList.add('hidden');
+    toast('Tugas berhasil ditugaskan ke '+created.assignedToName);
+    renderSupervisor();
+  }catch(e){
+    toast('Gagal menugaskan: ' + (e.message||'coba lagi'));
+  }
 }
 
 function openPlot(code){
@@ -1880,39 +1962,44 @@ function openCropCycleDetail(id){
     </div>`);
 }
 
-function openReport(r){
-  openPanelHTML(panelHeader(r.act, r.worker+' · '+(r.plot||r.komoditas||'-')+' · '+(r.time||'')) + `
-    <div class="p-5 text-[13px] space-y-3">
-      <div><p class="field-label">Target vs Realisasi</p><p class="font-semibold">0.8 ha direncanakan · 0.8 ha selesai</p></div>
-      <div><p class="field-label">Bahan digunakan</p><p class="font-semibold">NPK 16-16-16 — 35 kg (batch NPK-260805)</p></div>
-      <div><p class="field-label">Foto</p><div class="grid grid-cols-3 gap-2"><div class="upload-box">Sebelum</div><div class="upload-box">Selama</div><div class="upload-box">Sesudah</div></div></div>
+function openReport(id){
+  const r = incomingReports.find(x=>x.id===id);
+  if(!r){ toast('Laporan tidak ditemukan'); return; }
+  const photoHtml = r.photos && Object.keys(r.photos).length
+    ? `<div class="grid grid-cols-3 gap-2">${Object.entries(r.photos).map(([k,v])=>`<div class="upload-box" style="background-image:url(${v});background-size:cover;background-position:center;"></div>`).join('')}</div>`
+    : `<p class="text-[11.5px] text-gray-400">Tidak ada foto dilampirkan.</p>`;
+  const reportStatusBadge = {Menunggu:'b-amber', Disetujui:'b-green', Revisi:'b-red', Ditolak:'b-gray'};
+  const actionsHtml = r.status==='Menunggu' ? `
       <div class="flex gap-2 pt-2">
-        <button class="flex-1 py-2 rounded-lg font-bold text-white text-[12.5px]" style="background:var(--green-600);" onclick="toast('Laporan disetujui'); closePanel();">Approve</button>
-        <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] border border-gray-300" onclick="toast('Dikembalikan untuk revisi'); closePanel();">Revisi</button>
-        <button class="px-3 py-2 rounded-lg font-bold text-[12.5px] border border-red-200 text-red-600" onclick="toast('Laporan ditolak'); closePanel();">Tolak</button>
-      </div>
+        <button class="flex-1 py-2 rounded-lg font-bold text-white text-[12.5px]" style="background:var(--green-600);" onclick="reviewIncomingReport('${r.id}','approve')">Approve</button>
+        <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] border border-gray-300" onclick="reviewIncomingReport('${r.id}','revision')">Minta Revisi</button>
+        <button class="px-3 py-2 rounded-lg font-bold text-[12.5px] border border-red-200 text-red-600" onclick="reviewIncomingReport('${r.id}','reject')">Tolak</button>
+      </div>` : (r.reviewNote ? `<div><p class="field-label">Catatan reviewer</p><p class="font-semibold">${r.reviewNote}</p></div>` : '');
+  openPanelHTML(panelHeader(r.act||'Lapor Masalah', (r.worker||'-')+' · '+(r.komoditas||'-')+' · '+(r.time||'')) + `
+    <div class="p-5 text-[13px] space-y-3">
+      <div><p class="field-label">Status</p><span class="badge ${reportStatusBadge[r.status]||'b-amber'}">${r.status||'Menunggu'}</span></div>
+      <div><p class="field-label">Bagian terdampak</p><p class="font-semibold">${r.bagianTerdampak||'-'}</p></div>
+      <div><p class="field-label">Jenis gejala</p><p class="font-semibold">${r.jenisGejala||'-'}</p></div>
+      <div><p class="field-label">Jumlah sampel / terdampak</p><p class="font-semibold">${r.jumlahSampel||'-'} / ${r.jumlahTerdampak||'-'}</p></div>
+      <div><p class="field-label">Severity</p><p class="font-semibold">${r.severity||'-'} / 5</p></div>
+      <div><p class="field-label">Distribusi</p><p class="font-semibold">${r.distribusi||'-'}</p></div>
+      <div><p class="field-label">Dugaan awal pekerja</p><p class="font-semibold">${r.dugaan||'-'}</p></div>
+      <div><p class="field-label">Foto</p>${photoHtml}</div>
+      ${actionsHtml}
     </div>`);
 }
-
-function openIssue(i){
-  openPanelHTML(panelHeader(i.title, 'Severity '+i.sev+'/5 · '+i.status) + `
-    <div class="p-5 text-[13px] space-y-3">
-      <div><p class="field-label">Distribusi</p><p class="font-semibold">Berkelompok, tepi bedengan</p></div>
-      <div><p class="field-label">Rekomendasi</p><p class="font-semibold">Treatment kimiawi target — lihat Treatment Planner</p></div>
-      <div><p class="field-label">Riwayat</p><p class="font-semibold">Ditemukan 11 Agu · eskalasi otomatis 12 Agu</p></div>
-    </div>`);
-}
-
-function openApproval(a){
-  openPanelHTML(panelHeader(a.title, a.type+' · diajukan oleh '+a.requester) + `
-    <div class="p-5 text-[13px] space-y-3">
-      <div><p class="field-label">Level approval</p><p class="font-semibold">Sesuai nilai &amp; jenis bahan — level 1</p></div>
-      <div><p class="field-label">Catatan</p><textarea rows="3" placeholder="Catatan keputusan (opsional)"></textarea></div>
-      <div class="flex gap-2 pt-2">
-        <button class="flex-1 py-2 rounded-lg font-bold text-white text-[12.5px]" style="background:var(--green-600);" onclick="toast('Disetujui'); closePanel();">Approve</button>
-        <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] border border-red-200 text-red-600" onclick="toast('Ditolak'); closePanel();">Reject</button>
-      </div>
-    </div>`);
+async function reviewIncomingReport(id, action){
+  const reviewNote = action!=='approve' ? prompt('Catatan untuk pekerja (opsional):') || '' : undefined;
+  try{
+    const updated = await apiPut('/incomingReports/'+id, {action, reviewNote});
+    const idx = incomingReports.findIndex(x=>x.id===id);
+    if(idx>=0) incomingReports[idx] = updated;
+    toast(action==='approve' ? 'Laporan disetujui' : action==='revision' ? 'Dikembalikan untuk revisi' : 'Laporan ditolak');
+    closePanel();
+    renderSupervisor();
+  }catch(e){
+    toast('Gagal: ' + (e.message||'coba lagi'));
+  }
 }
 
 function openDict(p){
@@ -1999,32 +2086,34 @@ function renderCompatMatrix(){
 
 /* ===================== WORKER SCREENS ===================== */
 function statusBadge(status){
-  const map = {Assigned:'b-blue','In Progress':'b-amber',Submitted:'b-blue',Approved:'b-green','Under review':'b-amber'};
-  return `<span class="badge ${map[status]||'b-gray'}">${status}</span>`;
+  return `<span class="badge ${WO_STATUS_BADGE[status]||'b-gray'}">${WO_STATUS_LABEL[status]||status}</span>`;
 }
 function renderWorkerLists(){
-  document.getElementById('w-beranda-preview').innerHTML = tasks.slice(0,2).map(t=>`
-    <div class="card p-3 mb-2" onclick="openTaskDetail('${t.id}')">
+  const active = myActiveWorkOrders();
+  const history = myWorkOrderHistory();
+  const emptyCard = (msg) => `<div class="card p-4 text-center"><p class="text-[12px] text-gray-400">${msg}</p></div>`;
+  document.getElementById('w-beranda-preview').innerHTML = active.length ? active.slice(0,2).map(t=>`
+    <div class="card p-3 mb-2 clickable" onclick="openTaskDetail('${t.id}')">
       <div class="flex justify-between items-start"><p class="font-bold text-[12.5px] text-gray-800">${t.act}</p>${statusBadge(t.status)}</div>
-      <p class="text-[11px] text-gray-500 mt-0.5">${t.plot} · ${t.time}</p>
-    </div>`).join('');
-  document.getElementById('w-tugas-list').innerHTML = tasks.map(t=>`
-    <div class="card p-3" onclick="openTaskDetail('${t.id}')">
+      <p class="text-[11px] text-gray-500 mt-0.5">${t.plot} · ${t.scheduledDate}</p>
+    </div>`).join('') : emptyCard('Belum ada tugas yang ditugaskan ke Anda.');
+  document.getElementById('w-tugas-list').innerHTML = active.length ? active.map(t=>`
+    <div class="card p-3 clickable" onclick="openTaskDetail('${t.id}')">
       <div class="flex justify-between items-start"><p class="font-bold text-[12.5px] text-gray-800">${t.act}</p>${statusBadge(t.status)}</div>
-      <p class="text-[11px] text-gray-500 mt-0.5">${t.plot} · ${t.cycle}</p>
-      <p class="text-[11px] text-gray-400">${t.time}</p>
-    </div>`).join('');
-  document.getElementById('w-riwayat-list').innerHTML = historyList.map(h=>`
-    <div class="card p-3">
+      <p class="text-[11px] text-gray-500 mt-0.5">${t.plot}${t.location?' · '+t.location:''}</p>
+      <p class="text-[11px] text-gray-400">${t.scheduledDate}</p>
+    </div>`).join('') : emptyCard('Belum ada tugas aktif. Tugas baru akan muncul di sini setelah ditugaskan Supervisor/Agronomis.');
+  document.getElementById('w-riwayat-list').innerHTML = history.length ? history.map(h=>`
+    <div class="card p-3 clickable" onclick="openTaskDetail('${h.id}')">
       <div class="flex justify-between items-start"><p class="font-bold text-[12.5px] text-gray-800">${h.act}</p>${statusBadge(h.status)}</div>
-      <p class="text-[11px] text-gray-500 mt-0.5">${h.plot} · ${h.date}</p>
-    </div>`).join('');
+      <p class="text-[11px] text-gray-500 mt-0.5">${h.plot} · ${h.submittedAt ? new Date(h.submittedAt).toLocaleDateString('id-ID') : h.scheduledDate}</p>
+    </div>`).join('') : emptyCard('Belum ada riwayat tugas.');
   const syncMap = {'Tersinkron':'b-green','Menunggu sinkronisasi':'b-amber','Tersimpan di perangkat':'b-gray','Konflik':'b-red'};
-  document.getElementById('w-sync-list').innerHTML = syncQueue.map(s=>`
+  document.getElementById('w-sync-list').innerHTML = syncQueue.length ? syncQueue.map(s=>`
     <div class="card p-3 flex justify-between items-center">
       <span class="text-[12.5px]">${s.name}</span>
       <span class="badge ${syncMap[s.state]}">${s.state}</span>
-    </div>`).join('');
+    </div>`).join('') : emptyCard('Tidak ada item yang perlu disinkronkan.');
 }
 function wShow(name){
   document.querySelectorAll('#role-worker .screen').forEach(s=>s.classList.remove('active'));
@@ -2033,30 +2122,95 @@ function wShow(name){
   const nav = document.querySelector(`.bottom-nav button[data-navw="${name}"]`);
   if(nav) nav.classList.add('active');
 }
+const taskPhotos = {}; // slotKey -> dataURL, dipakai saat mengerjakan tugas (terpisah dari uploadedPhotos laporan masalah)
+let currentTaskId = null;
+function handleTaskPhoto(evt, slotKey){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    taskPhotos[slotKey] = reader.result;
+    const slot = document.getElementById('task-photo-'+slotKey);
+    if(slot){ slot.style.backgroundImage = `url(${reader.result})`; slot.style.backgroundSize='cover'; slot.style.backgroundPosition='center'; const span = slot.querySelector('span'); if(span) span.style.display='none'; }
+  };
+  reader.readAsDataURL(file);
+}
+function taskPhotoSlot(key, label){
+  return `<label class="upload-box" style="cursor:pointer; overflow:hidden; padding:0;" id="task-photo-${key}">
+      <span>+ ${label}</span>
+      <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleTaskPhoto(event,'${key}')">
+    </label>`;
+}
 function openTaskDetail(id){
-  const t = tasks.find(x=>x.id===id);
+  const t = workOrders.find(x=>x.id===id);
+  if(!t){ toast('Tugas tidak ditemukan'); return; }
+  currentTaskId = id;
+  Object.keys(taskPhotos).forEach(k=>delete taskPhotos[k]);
+  const canWork = ['assigned','in_progress','paused','revision'].includes(t.status);
+  const isPaused = t.status === 'paused';
   document.getElementById('w-detail-body').innerHTML = `
     <div class="flex justify-between items-start mb-1"><h2 class="text-base font-extrabold text-gray-900">${t.act}</h2>${statusBadge(t.status)}</div>
-    <p class="text-[11.5px] text-gray-500 mb-4">${t.plot} · ${t.cycle} · ${t.time}</p>
+    <p class="text-[11.5px] text-gray-500 mb-4">${t.plot}${t.location?' · '+t.location:''} · ${t.scheduledDate}</p>
+    ${t.status==='revision' && t.revisionNote ? `<div class="card p-3 mb-3" style="background:var(--amber-100); border-color:#fde68a;"><p class="text-[12px] font-bold" style="color:#92400e;">⚠ Perlu revisi</p><p class="text-[11.5px] mt-0.5" style="color:#92400e;">${t.revisionNote}</p></div>` : ''}
     <p class="font-bold text-[12.5px] text-gray-700 mb-1">Checklist SOP</p>
-    <div class="mb-3">${t.sop.map((s,i)=>`<div class="checklist-item"><input type="checkbox" ${i<2?'checked':''}><span class="text-[12.5px]">${s}</span></div>`).join('')}</div>
+    <div class="mb-3">${t.sop.length ? t.sop.map((s,i)=>`<div class="checklist-item"><input type="checkbox" ${t.sopChecked&&t.sopChecked[i]?'checked':''} ${canWork?'':'disabled'} onchange="toggleTaskSop(${i}, this.checked)"><span class="text-[12.5px]">${s}</span></div>`).join('') : '<p class="text-[11.5px] text-gray-400">Tidak ada checklist SOP untuk tugas ini.</p>'}</div>
     <div class="grid grid-cols-2 gap-2 mb-3">
-      <div><label class="field-label">Jumlah pekerja</label><input type="number" value="3"></div>
-      <div><label class="field-label">Area dikerjakan</label><input type="text" value="0.8 ha"></div>
+      <div><label class="field-label">Jumlah pekerja</label><input type="number" id="task-actual-workers" value="${t.actualWorkers ?? t.plannedWorkers ?? ''}" ${canWork?'':'disabled'}></div>
+      <div><label class="field-label">Area dikerjakan</label><input type="text" id="task-actual-area" value="${t.actualArea ?? t.plannedArea ?? ''}" ${canWork?'':'disabled'}></div>
     </div>
     <label class="field-label">Bahan aktual &amp; batch</label>
-    <input type="text" value="Sesuai rencana — lihat detail treatment" class="mb-3">
+    <input type="text" id="task-actual-materials" value="${t.materialsActual ?? t.materialsPlanned ?? ''}" class="mb-3" ${canWork?'':'disabled'}>
     <label class="field-label mb-1">Foto</label>
     <div class="grid grid-cols-3 gap-2 mb-3">
-      <div class="upload-box">+ Sebelum</div><div class="upload-box">+ Selama</div><div class="upload-box">+ Sesudah</div>
+      ${canWork ? taskPhotoSlot('before','Sebelum')+taskPhotoSlot('during','Selama')+taskPhotoSlot('after','Sesudah') : (t.photos && Object.keys(t.photos).length ? Object.entries(t.photos).map(([k,v])=>`<div class="upload-box" style="background-image:url(${v});background-size:cover;background-position:center;"></div>`).join('') : '<p class="text-[11px] text-gray-400 col-span-3">Tidak ada foto.</p>')}
     </div>
     <label class="field-label">Catatan / hambatan</label>
-    <textarea rows="2" placeholder="Tidak ada hambatan" class="mb-4"></textarea>
-    <div class="flex gap-2">
-      <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toast('Pekerjaan dijeda')">Pause</button>
-      <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="toast('Laporan terkirim untuk verifikasi supervisor'); wShow('tugas')">Selesai &amp; Kirim</button>
-    </div>`;
+    <textarea rows="2" id="task-notes" placeholder="Tidak ada hambatan" class="mb-4" ${canWork?'':'disabled'}>${t.notes||''}</textarea>
+    ${canWork ? `<div class="flex gap-2">
+      ${t.status==='in_progress' ? `<button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="taskAction('pause')">Pause</button>` :
+        `<button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="taskAction('start')">${isPaused?'Lanjutkan':'Mulai'}</button>`}
+      <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="taskAction('submit')">Selesai &amp; Kirim</button>
+    </div>` : `<p class="text-[11.5px] text-gray-400 text-center pt-2">Tugas ini sudah ${WO_STATUS_LABEL[t.status]||t.status} — tidak bisa diubah lagi.</p>`}`;
   wShow('detail');
+}
+async function toggleTaskSop(idx, checked){
+  const t = workOrders.find(x=>x.id===currentTaskId);
+  if(!t) return;
+  if(!t.sopChecked) t.sopChecked = t.sop.map(()=>false);
+  t.sopChecked[idx] = checked;
+  try{ await apiPut('/workorders/'+t.id, {sopChecked:t.sopChecked}); }catch(e){ toast('Gagal menyimpan checklist: '+(e.message||'')); }
+}
+async function taskAction(action){
+  const t = workOrders.find(x=>x.id===currentTaskId);
+  if(!t) return;
+  const body = {action};
+  if(action==='submit'){
+    body.actualWorkers = Number(document.getElementById('task-actual-workers').value) || null;
+    body.actualArea = document.getElementById('task-actual-area').value;
+    body.materialsActual = document.getElementById('task-actual-materials').value;
+    body.notes = document.getElementById('task-notes').value;
+    body.photos = { ...taskPhotos };
+    body.sopChecked = t.sopChecked;
+  }
+  try{
+    const updated = await apiPut('/workorders/'+t.id, body);
+    const idx = workOrders.findIndex(x=>x.id===t.id);
+    if(idx>=0) workOrders[idx] = updated;
+    renderWorkerLists();
+    if(action==='submit'){
+      toast('Laporan terkirim untuk verifikasi supervisor');
+      wShow('tugas');
+    }else if(action==='pause'){
+      toast('Pekerjaan dijeda');
+      openTaskDetail(t.id);
+    }else{
+      toast('Pekerjaan dimulai');
+      openTaskDetail(t.id);
+    }
+    if(typeof renderSupervisor === 'function') renderSupervisor();
+  }catch(e){
+    toast('Gagal menyimpan: ' + (e.message||'coba lagi'));
+  }
 }
 /* ===================== UPLOAD FOTO ===================== */
 const uploadedPhotos = {}; // slotKey -> dataURL
@@ -2145,6 +2299,37 @@ function openSettings(){
     </div>`);
 }
 
+function openMyProfileForm(){
+  if(!currentUser) return;
+  openPanelHTML(panelHeader('Profil Saya', currentUser.roleLabel) + `
+    <div class="p-5 text-[13px] space-y-3">
+      <div id="profile-form-error" class="hidden card p-2.5 text-[12px] font-semibold" style="background:var(--red-100); color:var(--red-700); border-color:#fecaca;"></div>
+      <div><label class="field-label">Nama lengkap</label><input type="text" id="profile-name" value="${currentUser.name||''}"></div>
+      <div><label class="field-label">Nomor telepon</label><input type="text" id="profile-phone" value="${currentUser.phone||''}" placeholder="opsional"></div>
+      <div><label class="field-label">Username (tidak bisa diubah sendiri)</label><input type="text" value="${currentUser.username||''}" readonly></div>
+      <button class="w-full py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveMyProfile()">Simpan Profil</button>
+      <hr style="border-color:#e6e9e7;">
+      <button class="w-full py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-700" onclick="openChangePasswordForm()">Ganti Kata Sandi</button>
+    </div>`);
+}
+async function saveMyProfile(){
+  const name = document.getElementById('profile-name').value.trim();
+  const phone = document.getElementById('profile-phone').value.trim();
+  const errEl = document.getElementById('profile-form-error');
+  errEl.classList.add('hidden');
+  if(!name){ errEl.textContent = 'Nama tidak boleh kosong.'; errEl.classList.remove('hidden'); return; }
+  try{
+    const updated = await apiPut('/auth/me', { name, phone });
+    Object.assign(currentUser, updated);
+    document.getElementById('user-name').innerText = currentUser.name;
+    document.getElementById('user-avatar').innerText = initialsOf(currentUser.name);
+    closePanel();
+    toast('Profil berhasil disimpan');
+  }catch(e){
+    errEl.textContent = e.message || 'Gagal menyimpan profil.';
+    errEl.classList.remove('hidden');
+  }
+}
 function openChangePasswordForm(){
   openPanelHTML(panelHeader('Ganti Kata Sandi', currentUser ? (currentUser.name+' — '+currentUser.roleLabel) : '') + `
     <div class="p-5 text-[13px] space-y-3">
@@ -2298,33 +2483,47 @@ function renderSupervisor(){
       ${i===4?'<div class="badge b-green mb-1" style="display:block;">Panen C1</div>':''}
     </div>`).join('');
 
-  document.getElementById('s-kanban-board').innerHTML = kanbanCols.map(col=>`
-    <div class="kanban-col">
-      <p class="font-bold text-[12px] mb-2" style="color:${col.color}">${col.label} (${col.items.length})</p>
-      ${col.items.map(it=>`<div class="kanban-card" onclick="openWorkOrder('${it.id}')"><p class="font-bold">${it.id}</p><p class="text-gray-600">${it.act}</p><p class="text-gray-400 text-[11px]">${it.plot}</p></div>`).join('')}
-    </div>`).join('');
+  const KANBAN_GROUPS = [
+    {key:'assigned', label:'Ditugaskan', color:'#2563eb', match: w=>w.status==='assigned'},
+    {key:'inprogress', label:'Dikerjakan', color:'#d97706', match: w=>['in_progress','paused'].includes(w.status)},
+    {key:'revision', label:'Revisi', color:'#dc2626', match: w=>w.status==='revision'},
+    {key:'submitted', label:'Menunggu Review', color:'#4338ca', match: w=>w.status==='submitted'},
+    {key:'approved', label:'Disetujui', color:'#15803d', match: w=>w.status==='approved'},
+  ];
+  document.getElementById('s-kanban-board').innerHTML = KANBAN_GROUPS.map(col=>{
+    const items = workOrders.filter(col.match);
+    return `<div class="kanban-col">
+      <p class="font-bold text-[12px] mb-2" style="color:${col.color}">${col.label} (${items.length})</p>
+      ${items.length ? items.map(it=>`<div class="kanban-card" onclick="openWorkOrder('${it.id}')"><p class="font-bold">${it.id}</p><p class="text-gray-600">${it.act}</p><p class="text-gray-400 text-[11px]">${it.assignedToName} · ${it.plot}</p></div>`).join('') : '<p class="text-[11px] text-gray-400">Kosong</p>'}
+    </div>`;}).join('');
 
-  document.getElementById('s-laporan-body').innerHTML = incomingReports.map((r,idx)=>`
-    <tr class="clickable" onclick='openReport(${JSON.stringify(r)})'>
-      <td>${r.worker}</td><td>${r.act}</td><td>${r.plot}</td><td>${r.time}</td>
-      <td>${r.status==='Menunggu'?'<span class="badge b-amber">Menunggu</span>':'<span class="badge b-green">Disetujui</span>'}</td>
-    </tr>`).join('');
+  const reportStatusBadge = {Menunggu:'b-amber', Disetujui:'b-green', Revisi:'b-red', Ditolak:'b-gray'};
+  document.getElementById('s-laporan-body').innerHTML = incomingReports.length ? incomingReports.map((r)=>`
+    <tr class="clickable" onclick="openReport('${r.id}')">
+      <td>${r.worker||'-'}</td><td>${r.act||'Lapor Masalah'}</td><td>${r.komoditas||r.plot||'-'}</td><td>${r.time||(r.createdAt?new Date(r.createdAt).toLocaleString('id-ID'):'-')}</td>
+      <td><span class="badge ${reportStatusBadge[r.status]||'b-gray'}">${r.status||'Menunggu'}</span></td>
+    </tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada laporan masuk.</td></tr>';
 
-  document.getElementById('s-kehadiran-body').innerHTML = attendance.map(a=>`
+  document.getElementById('s-kehadiran-body').innerHTML = attendance.length ? attendance.map(a=>`
     <tr><td>${a.name}</td><td>${a.team}</td><td>${a.in}</td><td>${a.loc}</td>
-    <td>${a.status==='Hadir'?'<span class="badge b-green">Hadir</span>':'<span class="badge b-amber">Izin</span>'}</td></tr>`).join('');
+    <td>${a.status==='Hadir'?'<span class="badge b-green">Hadir</span>':'<span class="badge b-amber">Izin</span>'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada data kehadiran hari ini.</td></tr>';
 
-  document.getElementById('s-masalah-list').innerHTML = openIssues.map(i=>`
-    <div class="card p-3 flex justify-between items-center clickable" onclick='openIssue(${JSON.stringify(i)})'>
-      <div><p class="font-bold text-[13px]">${i.title}</p><p class="text-[11px] text-gray-500">${i.status}</p></div>
-      <span class="badge ${i.sev>=4?'b-red':'b-amber'}">Severity ${i.sev}/5</span>
-    </div>`).join('');
+  const issues = incomingReports.filter(r=>Number(r.severity)>=4 && r.status!=='Ditolak');
+  document.getElementById('s-masalah-list').innerHTML = issues.length ? issues.map(i=>`
+    <div class="card p-3 flex justify-between items-center clickable" onclick="openReport('${i.id}')">
+      <div><p class="font-bold text-[13px]">${i.jenisGejala||i.komoditas||'Masalah'} — ${i.komoditas||''}</p><p class="text-[11px] text-gray-500">${i.status||'Menunggu'} · lapor oleh ${i.worker||'-'}</p></div>
+      <span class="badge b-red">Severity ${i.severity}/5</span>
+    </div>`).join('') : '<div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Tidak ada masalah berseverity tinggi (≥4) saat ini.</p></div>';
 
-  document.getElementById('s-approval-list').innerHTML = approvalQueue.map(a=>`
-    <div class="card p-3 flex justify-between items-center clickable" onclick='openApproval(${JSON.stringify(a)})'>
-      <div><p class="font-bold text-[13px]">${a.title}</p><p class="text-[11px] text-gray-500">${a.type} · ${a.requester}</p></div>
-      <span class="badge b-amber">Menunggu</span>
-    </div>`).join('');
+  const pendingPr = prList.filter(p=>p.status==='Menunggu Approval');
+  document.getElementById('s-approval-list').innerHTML = pendingPr.length ? pendingPr.map(p=>`
+    <div class="card p-3 flex justify-between items-center">
+      <div><p class="font-bold text-[13px]">Purchase Request — ${p.itemName}</p><p class="text-[11px] text-gray-500">${p.qty} ${p.unit||''} · diminta oleh ${p.requesterName||'-'}${p.note?' · '+p.note:''}</p></div>
+      <div class="flex gap-1.5">
+        <button class="px-3 py-1.5 rounded-lg font-bold text-white text-[11.5px]" style="background:var(--green-600);" onclick="reviewPr('${p.id}','Disetujui')">Setujui</button>
+        <button class="px-3 py-1.5 rounded-lg font-bold text-[11.5px] border border-red-200 text-red-600" onclick="reviewPr('${p.id}','Ditolak')">Tolak</button>
+      </div>
+    </div>`).join('') : '<div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Tidak ada permintaan approval saat ini.</p></div>';
 
   const prodData = [{n:'Regu Mawar',v:82},{n:'Regu Melati',v:74},{n:'Regu Kenanga',v:91}];
   document.getElementById('s-produktivitas-chart').innerHTML = prodData.map(p=>`
@@ -2410,6 +2609,85 @@ function aShow(name){
   document.querySelector(`#role-agronomist .screen[data-a="${name}"]`).classList.add('active');
   document.querySelectorAll('#role-agronomist .sidebar button').forEach(b=>b.classList.remove('active'));
   document.querySelector(`#role-agronomist .sidebar button[data-nava="${name}"]`).classList.add('active');
+  if(name==='treatment') populateTreatmentForm();
+}
+async function populateTreatmentForm(){
+  const ccSel = document.getElementById('atr-cropcycle');
+  if(ccSel && !ccSel.dataset.filled){
+    ccSel.innerHTML = '<option value="">— Pilih crop cycle —</option>' + cropCycles.map(c=>`<option value="${c.id}">${c.id} — ${c.crop} (${c.plot}, ${c.location||'-'})</option>`).join('');
+    ccSel.dataset.filled = '1';
+  }
+  const prodSel = document.getElementById('atr-product');
+  if(prodSel && !prodSel.dataset.filled){
+    prodSel.innerHTML = '<option value="">— Pilih produk —</option>' + productDb.filter(p=>p.status==='Approved').map(p=>`<option value="${p.name}">${p.name} (${p.cat})</option>`).join('');
+    prodSel.dataset.filled = '1';
+  }
+  const assigneeSel = document.getElementById('atr-assignee');
+  if(assigneeSel && !assigneeSel.dataset.filled){
+    if(!workersListCache){ try{ workersListCache = await apiGet('/workers'); }catch(e){ workersListCache = []; } }
+    assigneeSel.innerHTML = '<option value="">— Pilih pekerja —</option>' + workersListCache.map(w=>`<option value="${w.id}">${w.name}${w.team&&w.team!=='-'?' — '+w.team:''}</option>`).join('');
+    assigneeSel.dataset.filled = '1';
+  }
+  const dateEl = document.getElementById('atr-date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+}
+function onAtrProductChange(){
+  const p = productDb.find(x=>x.name===document.getElementById('atr-product').value);
+  const validationBox = document.getElementById('atr-validation');
+  if(!p){
+    ['atr-moa','atr-phi','atr-rei','atr-ppe','atr-dosis'].forEach(id=>document.getElementById(id).value='');
+    validationBox.classList.add('hidden');
+    return;
+  }
+  document.getElementById('atr-moa').value = activeIngredients.find(a=>a.name===p.ai)?.moa || '-';
+  document.getElementById('atr-phi').value = p.phi || '-';
+  document.getElementById('atr-rei').value = p.rei || '-';
+  document.getElementById('atr-ppe').value = p.ppe || '-';
+  document.getElementById('atr-dosis').value = p.dosis || '';
+  if(p.status !== 'Approved'){
+    document.getElementById('atr-validation-text').innerText = 'Produk ini berstatus "'+p.status+'" — tidak boleh dipakai sampai statusnya kembali Approved.';
+    validationBox.classList.remove('hidden');
+  }else{
+    validationBox.classList.add('hidden');
+  }
+}
+async function approveTreatmentAndAssign(){
+  const cc = cropCycles.find(c=>c.id===document.getElementById('atr-cropcycle').value);
+  const diagnosis = document.getElementById('atr-diagnosis').value.trim();
+  const product = document.getElementById('atr-product').value;
+  const assignedTo = document.getElementById('atr-assignee').value;
+  if(!diagnosis || !product || !assignedTo){
+    toast('Diagnosis, produk, dan pekerja yang ditugaskan wajib diisi'); return;
+  }
+  const dosis = document.getElementById('atr-dosis').value;
+  const luas = document.getElementById('atr-luas').value;
+  const volume = document.getElementById('atr-volume').value;
+  const phi = document.getElementById('atr-phi').value;
+  const ppe = document.getElementById('atr-ppe').value;
+  const payload = {
+    act: 'Treatment: ' + diagnosis,
+    assignedTo,
+    cropCycleId: cc ? cc.id : null,
+    plot: cc ? cc.plot : '-',
+    location: cc ? cc.location : '-',
+    plannedArea: luas || (cc ? cc.plot : '-'),
+    materialsPlanned: product + (dosis?' — '+dosis:'') + (volume?', volume '+volume:''),
+    scheduledDate: document.getElementById('atr-date').value,
+    sop: ['Periksa APD lengkap ('+(ppe||'sesuai label')+')', 'Siapkan bahan sesuai rencana: '+product, 'Aplikasi sesuai dosis & luas rencana', 'Perhatikan PHI: '+(phi||'-'), 'Dokumentasi foto sebelum/selama/sesudah'],
+    source: 'treatment-approval',
+  };
+  try{
+    const created = await apiPost('/workorders', payload);
+    workOrders.unshift(created);
+    toast('Treatment disetujui — tugas dibuat untuk '+created.assignedToName);
+    ['atr-diagnosis','atr-luas','atr-volume'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('atr-product').value='';
+    document.getElementById('atr-assignee').value='';
+    onAtrProductChange();
+    if(typeof renderSupervisor==='function') renderSupervisor();
+  }catch(e){
+    toast('Gagal membuat work order: '+(e.message||'coba lagi'));
+  }
 }
 function renderAgronomist(){
   const statusMap = {ACTIVE:'b-green', HARVESTING:'b-blue', PLANNED:'b-gray'};
@@ -2476,11 +2754,138 @@ function renderAgronomist(){
 }
 
 /* ===================== WAREHOUSE SCREENS ===================== */
+let stockTransactions = [];
 function hShow(name){
   document.querySelectorAll('#role-warehouse .screen').forEach(s=>s.classList.remove('active'));
   document.querySelector(`#role-warehouse .screen[data-h="${name}"]`).classList.add('active');
   document.querySelectorAll('#role-warehouse .sidebar button').forEach(b=>b.classList.remove('active'));
   document.querySelector(`#role-warehouse .sidebar button[data-navh="${name}"]`).classList.add('active');
+  if(['penerimaan','pengeluaran','batch','pr'].includes(name)) loadStockData();
+}
+function itemOptionsHtml(){
+  return '<option value="">— Pilih barang —</option>' + itemMaster.map(it=>`<option value="${it.id}">${it.name} (stok: ${it.stock} ${it.unit})</option>`).join('');
+}
+async function loadStockData(){
+  try{ stockTransactions = await apiGet('/stock/transactions'); }catch(e){ toast('Gagal memuat riwayat stok: '+(e.message||'')); }
+  const rcvSel = document.getElementById('rcv-item');
+  if(rcvSel) rcvSel.innerHTML = itemOptionsHtml();
+  const issSel = document.getElementById('iss-item');
+  if(issSel) issSel.innerHTML = itemOptionsHtml();
+  const prSel = document.getElementById('pr-item');
+  if(prSel) prSel.innerHTML = itemOptionsHtml();
+  const woSel = document.getElementById('iss-wo');
+  if(woSel){
+    const openWos = workOrders.filter(w=>['assigned','in_progress','paused'].includes(w.status));
+    woSel.innerHTML = '<option value="">— Tanpa referensi work order —</option>' + openWos.map(w=>`<option value="${w.id}">${w.id} — ${w.act}, ${w.plot}</option>`).join('');
+  }
+  const rcvBody = document.getElementById('rcv-history-body');
+  if(rcvBody){
+    const receipts = stockTransactions.filter(t=>t.type==='in');
+    rcvBody.innerHTML = receipts.length ? receipts.map(t=>`<tr><td>${new Date(t.createdAt).toLocaleDateString('id-ID')}</td><td>${t.itemName}</td><td>${t.qty} ${t.unit}</td><td>${t.batch}</td><td>${t.po}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada riwayat penerimaan.</td></tr>';
+  }
+  const issBody = document.getElementById('iss-history-body');
+  if(issBody){
+    const issues = stockTransactions.filter(t=>t.type==='out');
+    issBody.innerHTML = issues.length ? issues.map(t=>`<tr><td>${new Date(t.createdAt).toLocaleDateString('id-ID')}</td><td>${t.itemName}</td><td>${t.qty} ${t.unit}</td><td>${t.recipient}</td><td>${t.workOrderId||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada riwayat pengeluaran.</td></tr>';
+  }
+  const batchBody = document.getElementById('batch-body');
+  if(batchBody){
+    const receipts = stockTransactions.filter(t=>t.type==='in' && t.batch && t.batch!=='-').slice().sort((a,b)=>(a.expiry||'9999').localeCompare(b.expiry||'9999'));
+    batchBody.innerHTML = receipts.length ? receipts.map(t=>`<tr><td>${t.itemName}</td><td>${t.batch}</td><td>${t.qty} ${t.unit}</td><td>${t.expiry ? new Date(t.expiry).toLocaleDateString('id-ID') : '-'}</td><td>${new Date(t.createdAt).toLocaleDateString('id-ID')}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada data batch.</td></tr>';
+  }
+  renderPrList();
+}
+async function saveStockReceive(){
+  const itemId = document.getElementById('rcv-item').value;
+  const qty = document.getElementById('rcv-qty').value;
+  if(!itemId || !qty){ toast('Barang dan jumlah wajib diisi'); return; }
+  try{
+    await apiPost('/stock/receive', {
+      itemId, qty,
+      batch: document.getElementById('rcv-batch').value,
+      expiry: document.getElementById('rcv-expiry').value,
+      po: document.getElementById('rcv-po').value,
+      condition: document.getElementById('rcv-condition').value,
+    });
+    itemMaster = await apiGet('/itemMaster');
+    renderItemMaster();
+    await loadStockData();
+    ['rcv-qty','rcv-batch','rcv-po'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('rcv-expiry').value='';
+    toast('Penerimaan barang tercatat, stok diperbarui');
+  }catch(e){
+    toast('Gagal menyimpan: '+(e.message||'coba lagi'));
+  }
+}
+function onIssItemChange(){
+  const it = itemMaster.find(x=>x.id===document.getElementById('iss-item').value);
+  document.getElementById('iss-stock').value = it ? it.stock+' '+it.unit : '';
+}
+async function saveStockIssue(){
+  const itemId = document.getElementById('iss-item').value;
+  const qty = document.getElementById('iss-qty').value;
+  if(!itemId || !qty){ toast('Barang dan jumlah wajib diisi'); return; }
+  try{
+    await apiPost('/stock/issue', {
+      itemId, qty,
+      workOrderId: document.getElementById('iss-wo').value || null,
+      recipient: document.getElementById('iss-recipient').value,
+      reason: document.getElementById('iss-reason').value,
+      batch: document.getElementById('iss-batch').value,
+    });
+    itemMaster = await apiGet('/itemMaster');
+    renderItemMaster();
+    await loadStockData();
+    ['iss-qty','iss-batch','iss-recipient','iss-reason'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('iss-stock').value='';
+    toast('Pengeluaran barang tercatat, stok diperbarui');
+  }catch(e){
+    toast('Gagal menyimpan: '+(e.message||'coba lagi'));
+  }
+}
+function togglePrForm(){ document.getElementById('pr-form').classList.toggle('hidden'); }
+async function savePr(){
+  const itemId = document.getElementById('pr-item').value;
+  const qty = document.getElementById('pr-qty').value;
+  if(!itemId || !qty){ toast('Barang dan jumlah wajib diisi'); return; }
+  const item = itemMaster.find(x=>x.id===itemId);
+  try{
+    const saved = await apiPost('/purchaseRequests', {
+      itemId, itemName: item?item.name:'-', qty: Number(qty), unit: item?item.unit:'-',
+      note: document.getElementById('pr-note').value,
+      requesterName: currentUser.name, status: 'Menunggu Approval',
+    });
+    prList.unshift(saved);
+    renderPrList();
+    togglePrForm();
+    ['pr-qty','pr-note'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('pr-item').value='';
+    toast('Purchase request diajukan');
+    if(typeof renderSupervisor==='function') renderSupervisor();
+  }catch(e){
+    toast('Gagal mengajukan PR: '+(e.message||'coba lagi'));
+  }
+}
+let prList = [];
+async function reviewPr(id, status){
+  try{
+    const updated = await apiPut('/purchaseRequests/'+id, {status});
+    const idx = prList.findIndex(p=>p.id===id);
+    if(idx>=0) prList[idx] = updated;
+    toast(status==='Disetujui' ? 'Purchase request disetujui' : 'Purchase request ditolak');
+    renderSupervisor();
+    renderPrList();
+  }catch(e){
+    toast('Gagal: '+(e.message||'coba lagi'));
+  }
+}
+function renderPrList(){
+  const prBody = document.getElementById('pr-body');
+  if(!prBody) return;
+  const statusMap = {'Menunggu Approval':'b-amber', 'Disetujui':'b-green', 'Ditolak':'b-gray'};
+  prBody.innerHTML = prList.length ? prList.map(p=>`
+    <tr><td>${p.id}</td><td>${p.itemName}</td><td>${p.qty} ${p.unit||''}</td><td>${p.requesterName||'-'}</td>
+    <td><span class="badge ${statusMap[p.status]||'b-gray'}">${p.status}</span></td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada purchase request.</td></tr>';
 }
 
 /* ===================== ADMIN ===================== */

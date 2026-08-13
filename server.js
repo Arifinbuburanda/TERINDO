@@ -47,6 +47,7 @@ const COLLECTION_WRITE_ROLES = {
   problemDict: ['admin'],
   activeIngredients: ['admin'],
   compatGroups: ['admin'],
+  purchaseRequests: ['admin', 'warehouse', 'supervisor'],
 };
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -57,27 +58,17 @@ if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true }
  * kali server dijalankan. Setelah itu, semua perubahan (tambah/ubah/hapus)
  * disimpan langsung ke data/db.json dan seed ini tidak dipakai lagi. */
 const SEED_COLLECTIONS = {
-  tasks: [],
+  workOrders: [],
 
-  historyList: [],
+  stockTransactions: [],
+
+  purchaseRequests: [],
 
   syncQueue: [],
-
-  kanbanCols: [
-  {key:'draft', label:'Draft', color:'#9ca3af', items:[]},
-  {key:'assigned', label:'Assigned', color:'#2563eb', items:[]},
-  {key:'inprogress', label:'In Progress', color:'#d97706', items:[]},
-  {key:'submitted', label:'Submitted', color:'#4338ca', items:[]},
-  {key:'approved', label:'Approved', color:'#15803d', items:[]},
-],
 
   incomingReports: [],
 
   attendance: [],
-
-  openIssues: [],
-
-  approvalQueue: [],
 
   cropCycles: [
   // --- Pabuaran ---
@@ -266,12 +257,16 @@ function saveDB() {
 
 /* Koleksi yang boleh diakses lewat REST API generik di bawah ini. */
 const COLLECTIONS = [
-  'tasks', 'historyList', 'syncQueue', 'kanbanCols', 'incomingReports', 'attendance',
-  'openIssues', 'approvalQueue', 'cropCycles', 'scoutingSessions', 'sopList', 'problemDict',
+  'syncQueue', 'attendance', 'purchaseRequests',
+  'cropCycles', 'scoutingSessions', 'sopList', 'problemDict',
   'productDb', 'activeIngredients', 'compatGroups', 'itemMaster', 'treatmentList',
   'dailyPlans', 'monthlyPlans', 'dailyReports', 'monthlyReports', 'greenReports',
   'locations', 'harvestReports',
 ];
+/* workOrders, incomingReports & stockTransactions TIDAK memakai CRUD generik
+ * di atas — workOrders/incomingReports aksesnya berbasis kepemilikan, dan
+ * stockTransactions HARUS selalu tercipta bersamaan dengan perubahan stok
+ * itemMaster (lihat bagian WORK ORDER, LAPORAN MASALAH & GUDANG/STOK). */
 /* compatMatrix bukan daftar (array) melainkan objek referensi pasangan
  * kompatibilitas — disajikan lewat endpoint tersendiri yang read-only. */
 
@@ -435,6 +430,24 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
+app.put('/api/auth/me', requireAuth, (req, res) => {
+  /* Edit profil sendiri (bukan lewat Admin) — hanya field non-sensitif:
+   * nama, telepon, foto profil. Username/role tetap hanya bisa diubah Admin. */
+  const { name, phone, photo } = req.body || {};
+  const db = loadDB();
+  const user = db.users.find(u => u.id === req.currentUser.id);
+  if (!user) return res.status(404).json({ error: 'Akun tidak ditemukan.' });
+  if (name !== undefined) {
+    const trimmed = String(name).trim();
+    if (!trimmed) return res.status(400).json({ error: 'Nama tidak boleh kosong.' });
+    user.name = trimmed;
+  }
+  if (phone !== undefined) user.phone = String(phone).trim();
+  if (photo !== undefined) user.photo = photo;
+  saveDB();
+  res.json(publicUser(user));
+});
+
 app.post('/api/auth/change-password', requireAuth, (req, res) => {
   const { oldPassword, newPassword } = req.body || {};
   if (!oldPassword || !newPassword) {
@@ -452,6 +465,15 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
   delete user.mustChangePassword;
   saveDB();
   res.json({ ok: true });
+});
+
+/* ===================== DAFTAR PEKERJA (untuk keperluan assign tugas) ===================== */
+/* Endpoint ringan khusus Supervisor/Agronomis/Admin untuk mengisi dropdown
+ * "tugaskan ke" saat membuat work order — hanya field yang perlu, bukan
+ * data akun lengkap seperti /api/admin/users (yang admin-only). */
+app.get('/api/workers', requireRole('supervisor', 'agronomist', 'admin'), (req, res) => {
+  const db = loadDB();
+  res.json(db.users.filter(u => u.role === 'worker').map(u => ({ id: u.id, name: u.name, team: u.team })));
 });
 
 /* ===================== ADMIN — MANAJEMEN AKUN PEKERJA ===================== */
@@ -613,6 +635,272 @@ app.post('/api/admin/registrations/:id/reject', requireRole('admin'), (req, res)
 app.get('/api/compat-matrix', requireAuth, (req, res) => {
   const db = loadDB();
   res.json(db.compatMatrix || {});
+});
+
+/* ===================== WORK ORDER (TUGAS LAPANGAN) ===================== */
+/* Satu sumber data untuk seluruh siklus tugas lapangan: dibuat & ditugaskan
+ * oleh Supervisor/Agronomis ke seorang pekerja, dikerjakan pekerja (mulai →
+ * jeda → kirim dengan foto & catatan), lalu direview Supervisor/Agronomis
+ * (setujui atau minta revisi). Endpoint khusus (bukan CRUD generik) karena
+ * aturan aksesnya berbasis kepemilikan, bukan cuma berbasis role. */
+const WO_ASSIGN_ROLES = ['supervisor', 'agronomist', 'admin'];
+const WO_REVIEW_ROLES = ['supervisor', 'agronomist', 'admin'];
+
+app.get('/api/workorders', requireAuth, (req, res) => {
+  const db = loadDB();
+  res.json(db.workOrders || []);
+});
+
+app.post('/api/workorders', requireRole(...WO_ASSIGN_ROLES), (req, res) => {
+  const { cropCycleId, plot, location, act, sop, assignedTo, plannedWorkers, plannedArea, materialsPlanned, scheduledDate, source } = req.body || {};
+  if (!act || !assignedTo) {
+    return res.status(400).json({ error: 'Aktivitas dan pekerja yang ditugaskan wajib diisi.' });
+  }
+  const db = loadDB();
+  const worker = db.users.find(u => u.id === assignedTo);
+  if (!worker) return res.status(400).json({ error: 'Pekerja tidak ditemukan.' });
+  const wo = {
+    id: newId('WO'),
+    cropCycleId: cropCycleId || null,
+    plot: plot || '-',
+    location: location || '-',
+    act: String(act).trim(),
+    sop: Array.isArray(sop) ? sop : [],
+    sopChecked: Array.isArray(sop) ? sop.map(() => false) : [],
+    assignedTo: worker.id,
+    assignedToName: worker.name,
+    team: worker.team || '-',
+    plannedWorkers: plannedWorkers || 1,
+    plannedArea: plannedArea || '-',
+    materialsPlanned: materialsPlanned || '-',
+    scheduledDate: scheduledDate || new Date().toISOString().slice(0, 10),
+    status: 'assigned',
+    actualWorkers: null,
+    actualArea: null,
+    materialsActual: null,
+    notes: '',
+    photos: {},
+    revisionNote: '',
+    source: source || 'manual',
+    createdBy: req.currentUser.id,
+    createdByName: req.currentUser.name,
+    createdAt: new Date().toISOString(),
+  };
+  if (!db.workOrders) db.workOrders = [];
+  db.workOrders.unshift(wo);
+  saveDB();
+  res.status(201).json(wo);
+});
+
+app.put('/api/workorders/:id', requireAuth, (req, res) => {
+  const db = loadDB();
+  if (!db.workOrders) db.workOrders = [];
+  const wo = db.workOrders.find(w => w.id === req.params.id);
+  if (!wo) return res.status(404).json({ error: 'Tugas tidak ditemukan.' });
+  const user = req.currentUser;
+  const body = req.body || {};
+
+  if (WO_REVIEW_ROLES.includes(user.role)) {
+    if (body.action === 'approve') {
+      if (wo.status !== 'submitted') return res.status(400).json({ error: 'Hanya tugas berstatus Submitted yang bisa disetujui.' });
+      wo.status = 'approved';
+      wo.approvedAt = new Date().toISOString();
+      wo.approvedBy = user.id;
+    } else if (body.action === 'revision') {
+      if (wo.status !== 'submitted') return res.status(400).json({ error: 'Hanya tugas berstatus Submitted yang bisa dikembalikan untuk revisi.' });
+      wo.status = 'revision';
+      wo.revisionNote = body.revisionNote || '';
+    } else if (body.action === 'cancel') {
+      if (!['assigned', 'in_progress', 'paused'].includes(wo.status)) return res.status(400).json({ error: 'Tugas yang sudah dikirim/selesai tidak bisa dibatalkan.' });
+      wo.status = 'cancelled';
+    } else {
+      ['act', 'sop', 'plot', 'location', 'plannedWorkers', 'plannedArea', 'materialsPlanned', 'scheduledDate'].forEach(k => {
+        if (body[k] !== undefined) wo[k] = body[k];
+      });
+    }
+  } else if (user.role === 'worker') {
+    if (wo.assignedTo !== user.id) {
+      return res.status(403).json({ error: 'Anda hanya bisa mengubah tugas milik Anda sendiri.' });
+    }
+    if (body.action === 'start') {
+      if (!['assigned', 'paused', 'revision'].includes(wo.status)) return res.status(400).json({ error: 'Tugas tidak bisa dimulai dari status ini.' });
+      wo.status = 'in_progress';
+    } else if (body.action === 'pause') {
+      if (wo.status !== 'in_progress') return res.status(400).json({ error: 'Hanya tugas yang sedang dikerjakan yang bisa dijeda.' });
+      wo.status = 'paused';
+    } else if (body.action === 'submit') {
+      if (!['assigned', 'in_progress', 'paused', 'revision'].includes(wo.status)) return res.status(400).json({ error: 'Tugas tidak bisa dikirim dari status ini.' });
+      wo.actualWorkers = body.actualWorkers ?? wo.actualWorkers;
+      wo.actualArea = body.actualArea ?? wo.actualArea;
+      wo.materialsActual = body.materialsActual ?? wo.materialsActual;
+      wo.notes = body.notes ?? wo.notes;
+      if (body.photos) wo.photos = Object.assign({}, wo.photos, body.photos);
+      if (body.sopChecked) wo.sopChecked = body.sopChecked;
+      wo.status = 'submitted';
+      wo.submittedAt = new Date().toISOString();
+      wo.revisionNote = '';
+    } else if (body.sopChecked !== undefined) {
+      wo.sopChecked = body.sopChecked;
+    } else {
+      return res.status(400).json({ error: 'Aksi tidak dikenali.' });
+    }
+  } else {
+    return res.status(403).json({ error: 'Anda tidak memiliki akses untuk aksi ini.' });
+  }
+
+  wo.updatedAt = new Date().toISOString();
+  saveDB();
+  res.json(wo);
+});
+
+app.delete('/api/workorders/:id', requireRole(...WO_ASSIGN_ROLES), (req, res) => {
+  const db = loadDB();
+  if (!db.workOrders) db.workOrders = [];
+  const idx = db.workOrders.findIndex(w => w.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Tugas tidak ditemukan.' });
+  const [removed] = db.workOrders.splice(idx, 1);
+  saveDB();
+  res.json(removed);
+});
+
+/* ===================== LAPORAN MASALAH (incoming reports) ===================== */
+/* Endpoint khusus (bukan CRUD generik) — pekerja hanya boleh mengubah/hapus
+ * laporan miliknya sendiri, dan hanya selama masih berstatus "Menunggu"
+ * (belum direview). Supervisor/Agronomis/Admin bisa mereview (setujui,
+ * minta revisi, atau tolak) laporan siapa pun. */
+app.get('/api/incomingReports', requireAuth, (req, res) => {
+  const db = loadDB();
+  res.json(db.incomingReports || []);
+});
+
+app.post('/api/incomingReports', requireAuth, (req, res) => {
+  const db = loadDB();
+  const record = Object.assign({}, req.body, {
+    id: newId('RPT'),
+    status: 'Menunggu',
+    reporterId: req.currentUser.id,
+    createdAt: new Date().toISOString(),
+  });
+  if (!db.incomingReports) db.incomingReports = [];
+  db.incomingReports.unshift(record);
+  saveDB();
+  res.status(201).json(record);
+});
+
+app.put('/api/incomingReports/:id', requireAuth, (req, res) => {
+  const db = loadDB();
+  const list = db.incomingReports || [];
+  const r = list.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: 'Laporan tidak ditemukan.' });
+  const user = req.currentUser;
+  const body = req.body || {};
+  if (WO_REVIEW_ROLES.includes(user.role)) {
+    if (body.action === 'approve') { r.status = 'Disetujui'; r.reviewedBy = user.id; r.reviewedAt = new Date().toISOString(); }
+    else if (body.action === 'revision') { r.status = 'Revisi'; r.reviewNote = body.reviewNote || ''; }
+    else if (body.action === 'reject') { r.status = 'Ditolak'; r.reviewNote = body.reviewNote || ''; }
+    else return res.status(400).json({ error: 'Aksi tidak dikenali.' });
+  } else if (user.role === 'worker') {
+    if (r.reporterId !== user.id) return res.status(403).json({ error: 'Anda hanya bisa mengubah laporan milik Anda sendiri.' });
+    if (r.status !== 'Menunggu') return res.status(400).json({ error: 'Laporan yang sudah diproses tidak bisa diubah lagi.' });
+    ['komoditas', 'umur', 'bagianTerdampak', 'jenisGejala', 'jumlahSampel', 'jumlahTerdampak', 'severity', 'distribusi', 'dugaan', 'photos'].forEach(k => {
+      if (body[k] !== undefined) r[k] = body[k];
+    });
+  } else {
+    return res.status(403).json({ error: 'Tidak memiliki akses.' });
+  }
+  r.updatedAt = new Date().toISOString();
+  saveDB();
+  res.json(r);
+});
+
+app.delete('/api/incomingReports/:id', requireAuth, (req, res) => {
+  const db = loadDB();
+  const list = db.incomingReports || [];
+  const idx = list.findIndex(x => x.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Laporan tidak ditemukan.' });
+  const user = req.currentUser;
+  const r = list[idx];
+  const isOwner = r.reporterId === user.id && r.status === 'Menunggu';
+  const isReviewer = WO_REVIEW_ROLES.includes(user.role);
+  if (!isOwner && !isReviewer) return res.status(403).json({ error: 'Tidak memiliki akses.' });
+  list.splice(idx, 1);
+  saveDB();
+  res.json(r);
+});
+
+/* ===================== GUDANG / STOK (penerimaan & pengeluaran barang) ===================== */
+/* Endpoint khusus (bukan CRUD generik) karena setiap transaksi HARUS
+ * mengubah stok itemMaster secara konsisten (tidak boleh transaksi tercatat
+ * tapi stok tidak berubah, atau sebaliknya). */
+app.get('/api/stock/transactions', requireAuth, (req, res) => {
+  const db = loadDB();
+  res.json(db.stockTransactions || []);
+});
+
+app.post('/api/stock/receive', requireRole('warehouse', 'admin'), (req, res) => {
+  const { itemId, qty, batch, expiry, po, condition } = req.body || {};
+  const qtyNum = Number(qty);
+  if (!itemId || !qtyNum || qtyNum <= 0) {
+    return res.status(400).json({ error: 'Barang dan jumlah (lebih dari 0) wajib diisi.' });
+  }
+  const db = loadDB();
+  const item = (db.itemMaster || []).find(i => String(i.id) === String(itemId));
+  if (!item) return res.status(404).json({ error: 'Barang tidak ditemukan.' });
+  item.stock = (Number(item.stock) || 0) + qtyNum;
+  const trx = {
+    id: newId('TRX'),
+    type: 'in',
+    itemId: item.id,
+    itemName: item.name,
+    qty: qtyNum,
+    unit: item.unit || '-',
+    batch: batch || '-',
+    expiry: expiry || null,
+    po: po || '-',
+    condition: condition || 'Baik',
+    createdBy: req.currentUser.id,
+    createdByName: req.currentUser.name,
+    createdAt: new Date().toISOString(),
+  };
+  if (!db.stockTransactions) db.stockTransactions = [];
+  db.stockTransactions.unshift(trx);
+  saveDB();
+  res.status(201).json({ transaction: trx, item });
+});
+
+app.post('/api/stock/issue', requireRole('warehouse', 'admin'), (req, res) => {
+  const { itemId, qty, workOrderId, recipient, reason, batch } = req.body || {};
+  const qtyNum = Number(qty);
+  if (!itemId || !qtyNum || qtyNum <= 0) {
+    return res.status(400).json({ error: 'Barang dan jumlah (lebih dari 0) wajib diisi.' });
+  }
+  const db = loadDB();
+  const item = (db.itemMaster || []).find(i => String(i.id) === String(itemId));
+  if (!item) return res.status(404).json({ error: 'Barang tidak ditemukan.' });
+  const currentStock = Number(item.stock) || 0;
+  if (qtyNum > currentStock) {
+    return res.status(400).json({ error: 'Stok tidak mencukupi. Stok saat ini: ' + currentStock + ' ' + (item.unit || '') });
+  }
+  item.stock = currentStock - qtyNum;
+  const trx = {
+    id: newId('TRX'),
+    type: 'out',
+    itemId: item.id,
+    itemName: item.name,
+    qty: qtyNum,
+    unit: item.unit || '-',
+    batch: batch || '-',
+    workOrderId: workOrderId || null,
+    recipient: recipient || '-',
+    reason: reason || '-',
+    createdBy: req.currentUser.id,
+    createdByName: req.currentUser.name,
+    createdAt: new Date().toISOString(),
+  };
+  if (!db.stockTransactions) db.stockTransactions = [];
+  db.stockTransactions.unshift(trx);
+  saveDB();
+  res.status(201).json({ transaction: trx, item });
 });
 
 /* ===================== CRUD GENERIK UNTUK SEMUA MODUL ===================== */
