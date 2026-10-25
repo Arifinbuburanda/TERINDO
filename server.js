@@ -17,6 +17,23 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
 const app = express();
+/* Supaya Express membaca header dari reverse proxy Hostinger dengan benar
+ * (penting kalau nanti cookie sesi diset "secure"; tanpa ini Express akan
+ * salah mengira koneksi selalu HTTP dan cookie secure tidak pernah terkirim). */
+app.set('trust proxy', 1);
+
+/* ===================== PELINDUNG CRASH GLOBAL ===================== */
+/* Tanpa ini, satu error tak tertangani (misalnya di handler async yang lupa
+ * try/catch) bisa mematikan SELURUH proses Node — berarti aplikasi down
+ * untuk semua pengguna sampai ada yang restart manual. Logging saja, server
+ * tetap hidup, supaya satu permintaan yang gagal tidak menjatuhkan semuanya. */
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', new Date().toISOString(), reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', new Date().toISOString(), err && err.stack ? err.stack : err);
+});
+
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
@@ -275,6 +292,19 @@ function newId(prefix) {
 }
 
 /* ===================== APP SETUP ===================== */
+if (!process.env.SESSION_SECRET) {
+  console.error('[PERINGATAN] SESSION_SECRET belum diset di environment variable — server memakai kunci bawaan yang TIDAK aman untuk produksi. Set SESSION_SECRET di panel hosting sebelum dipakai sungguhan (lihat .env.example).');
+}
+
+/* Header keamanan dasar — ditulis manual (tanpa dependency baru) supaya
+ * tidak menambah risiko instalasi paket saat deploy. */
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 app.use(express.json({ limit: '12mb' })); // limit lumayan besar karena foto (base64) dikirim lewat body
 app.use(session({
   store: new FileStore({ path: SESSIONS_DIR, logFn: function () {} }),
@@ -287,6 +317,49 @@ app.use(session({
     sameSite: 'lax',
   },
 }));
+
+/* ===================== RATE LIMIT LOGIN (anti brute-force) ===================== */
+/* Pembatas sederhana di memory (tanpa dependency baru): maksimal 8 kali
+ * percobaan gagal per kombinasi IP+username dalam 15 menit, lalu dikunci
+ * sementara. Cukup untuk 1 proses server seperti setup saat ini. */
+const LOGIN_MAX_ATTEMPTS = 8;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const loginAttempts = new Map(); // key -> { count, firstAt }
+function loginRateLimiter(req, res, next) {
+  const key = req.ip + '|' + String((req.body && req.body.username) || '').trim().toLowerCase();
+  const now = Date.now();
+  const rec = loginAttempts.get(key);
+  if (rec && now - rec.firstAt < LOGIN_WINDOW_MS) {
+    if (rec.count >= LOGIN_MAX_ATTEMPTS) {
+      const sisaMenit = Math.ceil((LOGIN_WINDOW_MS - (now - rec.firstAt)) / 60000);
+      return res.status(429).json({ error: `Terlalu banyak percobaan masuk yang gagal. Coba lagi dalam ${sisaMenit} menit.` });
+    }
+  } else if (rec) {
+    loginAttempts.delete(key);
+  }
+  next();
+}
+function recordLoginFailure(req) {
+  const key = req.ip + '|' + String((req.body && req.body.username) || '').trim().toLowerCase();
+  const now = Date.now();
+  const rec = loginAttempts.get(key);
+  if (rec && now - rec.firstAt < LOGIN_WINDOW_MS) {
+    rec.count += 1;
+  } else {
+    loginAttempts.set(key, { count: 1, firstAt: now });
+  }
+}
+function clearLoginFailures(req) {
+  const key = req.ip + '|' + String((req.body && req.body.username) || '').trim().toLowerCase();
+  loginAttempts.delete(key);
+}
+// Bersihkan entri lama secara berkala supaya Map tidak tumbuh terus.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, rec] of loginAttempts) {
+    if (now - rec.firstAt > LOGIN_WINDOW_MS) loginAttempts.delete(key);
+  }
+}, 10 * 60 * 1000);
 
 function publicUser(u) {
   if (!u) return null;
@@ -361,7 +434,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', loginRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Nama pengguna dan kata sandi wajib diisi.' });
@@ -369,13 +442,16 @@ app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   const user = db.users.find(u => u.username.toLowerCase() === String(username).trim().toLowerCase());
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+    recordLoginFailure(req);
     return res.status(401).json({ error: 'Nama pengguna atau kata sandi salah.' });
   }
+  clearLoginFailures(req);
   req.session.userId = user.id;
   res.json({ user: publicUser(user) });
 });
 
 app.post('/api/auth/register', async (req, res) => {
+ try {
   /* Pendaftaran mandiri TIDAK langsung aktif — masuk sebagai permintaan
    * "menunggu persetujuan" yang harus di-approve oleh Admin lewat menu
    * Admin > Akun Pekerja. Admin juga mendapat notifikasi email (kalau SMTP
@@ -421,6 +497,10 @@ app.post('/api/auth/register', async (req, res) => {
     text: `Ada pendaftaran akun baru di UPterindo yang menunggu persetujuan Anda:\n\nNama: ${pending.name}\nEmail/Username: ${pending.username}\nNomor HP: ${pending.phone}\nRole diajukan: ${pending.roleLabel}\nPerusahaan/Kebun: ${pending.team}\n\nSilakan login ke menu Admin > Akun Pekerja untuk menyetujui atau menolak pendaftaran ini.`,
   }).catch(() => {});
   res.status(202).json({ message: 'Pendaftaran berhasil dikirim. Akun akan aktif setelah disetujui Admin.' });
+ } catch (err) {
+  console.error('Register error:', err && err.stack ? err.stack : err);
+  res.status(500).json({ error: 'Terjadi kesalahan di server. Silakan coba lagi.' });
+ }
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -1018,6 +1098,19 @@ app.post('/api/ai/analyze-photo', requireAuth, async (req, res) => {
   }
 });
 
+/* ===================== BACKUP DATA (Admin) ===================== */
+/* Penyimpanan data saat ini masih file JSON di server, tidak otomatis
+ * tercadangkan di tempat lain. Selama belum ada database/backup otomatis
+ * di sisi hosting, Admin bisa unduh salinan data kapan saja lewat tombol
+ * ini sebagai jaring pengaman manual (simpan filenya di tempat aman). */
+app.get('/api/admin/backup', requireRole('admin'), (req, res) => {
+  const db = loadDB();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  res.setHeader('Content-Disposition', `attachment; filename="upterindo-backup-${stamp}.json"`);
+  res.setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(db, null, 2));
+});
+
 /* ===================== STATIC FILES ===================== */
 app.use(express.static(PUBLIC_DIR));
 
@@ -1030,6 +1123,15 @@ app.use((req, res) => {
     return res.status(404).json({ error: 'Endpoint tidak ditemukan.' });
   }
   res.status(404).sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+
+/* Error handler global — penjaga terakhir. Setiap error yang lolos lewat
+ * next(err) atau dilempar di handler sinkron akan berhenti di sini dengan
+ * respons rapi, bukan membuat koneksi menggantung atau proses mati. */
+app.use((err, req, res, next) => {
+  console.error('[Express error handler]', new Date().toISOString(), err && err.stack ? err.stack : err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Terjadi kesalahan di server. Silakan coba lagi.' });
 });
 
 /* ===================== START ===================== */

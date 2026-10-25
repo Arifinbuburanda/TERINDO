@@ -57,16 +57,27 @@ Autentikasi sungguhan: kata sandi disimpan ter-hash (bcrypt) di server, sesi log
 
 > Untuk pemakaian produksi sungguhan: ganti kata sandi akun demo (atau hapus akunnya dari `data/db.json`), dan atur `SESSION_SECRET` (lihat di bawah) ke nilai acak yang rahasia.
 
-## Environment variables (opsional)
+## Environment variables
+
+Salin `.env.example` ke `.env` untuk pengembangan lokal (atau isi langsung di panel Environment Variables platform hosting untuk produksi — **jangan commit file `.env`**, sudah masuk `.gitignore`).
 
 | Variabel | Kegunaan | Default |
 |---|---|---|
 | `PORT` | Port server | `3000` |
-| `SESSION_SECRET` | Kunci rahasia untuk menandatangani cookie sesi — **wajib diganti** sebelum dipakai sungguhan | nilai bawaan (tidak aman untuk produksi) |
+| `SESSION_SECRET` | Kunci rahasia untuk menandatangani cookie sesi — **wajib diset nilai acak sendiri sebelum dipakai sungguhan**, server akan menampilkan peringatan di log kalau ini belum diset. Buat nilainya dengan `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | nilai bawaan (tidak aman untuk produksi) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Konfigurasi SMTP supaya notifikasi email (mis. pendaftaran akun baru) benar-benar terkirim. Kalau `SMTP_USER`/`SMTP_PASS` kosong, email otomatis masuk mode simulasi (hanya dicatat ke log server) | (kosong → mode simulasi) |
+| `ADMIN_NOTIFY_EMAIL` | Alamat yang menerima notifikasi pendaftaran akun baru | `arifinbuburanda@gmail.com` |
 | `OPENAI_API_KEY` | Kunci OpenAI API untuk analisis foto tanaman sungguhan. Kalau kosong, fitur analisis AI otomatis memakai contoh hasil simulasi supaya alur tetap bisa dicoba | (kosong → mode simulasi) |
 | `OPENAI_MODEL` | Model OpenAI yang dipakai untuk analisis foto | `gpt-4o-mini` |
 
 Kunci OpenAI **tidak pernah** dikirim ke browser — semua panggilan ke OpenAI dilakukan dari server (`server.js`), browser hanya memanggil `/api/ai/analyze-photo` milik aplikasi sendiri.
+
+## Keamanan & stabilitas (ditambahkan Oktober 2026)
+
+- **Rate-limit login**: maksimal 8 kali percobaan gagal per kombinasi IP + username dalam 15 menit, lalu dikunci sementara — mencegah brute-force kata sandi.
+- **Pelindung crash global**: error tak tertangani (termasuk di handler `async`) dicatat ke log tapi tidak lagi mematikan seluruh proses server — satu permintaan gagal tidak membuat aplikasi down untuk semua pengguna.
+- **Header keamanan dasar** (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) dipasang di semua respons.
+- **Backup manual**: Admin bisa unduh salinan penuh data aplikasi kapan saja lewat tombol "Unduh Backup" di halaman Admin (atau langsung `GET /api/admin/backup` saat login sebagai admin). Lakukan ini secara berkala dan simpan di tempat aman — lihat peringatan soal penyimpanan data di bawah.
 
 ## Deploy ke hosting Node (Render, Railway, Fly.io, Hostinger Node.js App, VPS, dsb.)
 
