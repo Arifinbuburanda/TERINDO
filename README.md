@@ -34,7 +34,7 @@ npm install
 npm start
 ```
 
-Lalu buka `http://localhost:3000/`. Saat pertama kali dijalankan, server otomatis membuat `data/db.json` berisi data contoh serta 6 akun demo.
+Lalu buka `http://localhost:3000/`. Saat pertama kali dijalankan (belum ada `data/db.json`), server otomatis membuat satu akun admin awal — lihat di bawah — plus data contoh kosong untuk koleksi lain.
 
 Port bisa diganti lewat environment variable `PORT` (mis. `PORT=8080 npm start`). Untuk auto-reload saat development: `npm run dev`.
 
@@ -42,28 +42,26 @@ Port bisa diganti lewat environment variable `PORT` (mis. `PORT=8080 npm start`)
 
 Autentikasi sungguhan: kata sandi disimpan ter-hash (bcrypt) di server, sesi login memakai cookie `httpOnly` (bukan sekadar klik tanpa verifikasi). Ada dua cara masuk:
 
-1. **Akun demo** — klik salah satu kartu di layar masuk untuk mengisi form secara otomatis, lalu klik **Masuk**:
+1. **Akun admin awal** (dibuat otomatis sekali saat `data/db.json` belum ada):
 
-   | Nama pengguna | Peran |
-   |---|---|
-   | budi.santoso, siti.aminah, joko.prasetyo | Pekerja Lapangan |
-   | reza.pratama | Supervisor / Mandor |
-   | rina.wulandari | Agronomis |
-   | dedi.kurniawan | Admin Gudang |
+   | Nama pengguna | Kata sandi awal | Peran |
+   |---|---|---|
+   | `admin` | `AdminTerindo#2026` (atau nilai `ADMIN_INITIAL_PASSWORD` jika diset — lihat di bawah) | Administrator |
 
-   Kata sandi untuk semua akun demo: **`Terindo@2026`**
+   Akun ini wajib ganti kata sandi saat login pertama kali. Akun Supervisor/Agronomis/Admin Gudang/Pekerja Lapangan **tidak dibuat otomatis** — admin yang membuatnya lewat menu "Kelola Pengguna" setelah masuk, atau lewat tab "Daftar" di layar masuk (lihat poin 2).
 
 2. **Daftar akun baru** — tab "Daftar" di layar masuk, isi email/nomor HP/peran/kata sandi. Akun baru langsung tersimpan di `data/db.json` dan bisa dipakai masuk kapan saja setelahnya.
 
-> Untuk pemakaian produksi sungguhan: ganti kata sandi akun demo (atau hapus akunnya dari `data/db.json`), dan atur `SESSION_SECRET` (lihat di bawah) ke nilai acak yang rahasia.
+> Untuk pemakaian produksi sungguhan: ganti kata sandi akun admin awal segera setelah login pertama (sistem akan memintanya), dan atur `SESSION_SECRET` (lihat di bawah) ke nilai acak yang rahasia. Variabel `ADMIN_INITIAL_PASSWORD` juga bisa diisi di panel Environment Variables platform hosting agar kata sandi awal bukan nilai default di kode.
 
 ## Environment variables
 
-Salin `.env.example` ke `.env` untuk pengembangan lokal (atau isi langsung di panel Environment Variables platform hosting untuk produksi — **jangan commit file `.env`**, sudah masuk `.gitignore`).
+`.env.example` berisi daftar referensi variabel di bawah ini. Untuk produksi, isi langsung di panel Environment Variables platform hosting. Untuk pengembangan lokal, set di shell sebelum `npm start` (mis. `SESSION_SECRET=xxx npm start`) — server tidak membaca file `.env` secara otomatis (tidak memakai paket `dotenv`). **Jangan pernah commit nilai rahasia sungguhan ke repo.**
 
 | Variabel | Kegunaan | Default |
 |---|---|---|
 | `PORT` | Port server | `3000` |
+| `ADMIN_INITIAL_PASSWORD` | Kata sandi akun `admin` yang dibuat otomatis saat `data/db.json` belum ada. Set ini di hosting **sebelum** deploy pertama kali agar kata sandi awal bukan nilai default di kode sumber | `AdminTerindo#2026` |
 | `SESSION_SECRET` | Kunci rahasia untuk menandatangani cookie sesi — **wajib diset nilai acak sendiri sebelum dipakai sungguhan**, server akan menampilkan peringatan di log kalau ini belum diset. Buat nilainya dengan `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | nilai bawaan (tidak aman untuk produksi) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Konfigurasi SMTP supaya notifikasi email (mis. pendaftaran akun baru) benar-benar terkirim. Kalau `SMTP_USER`/`SMTP_PASS` kosong, email otomatis masuk mode simulasi (hanya dicatat ke log server) | (kosong → mode simulasi) |
 | `ADMIN_NOTIFY_EMAIL` | Alamat yang menerima notifikasi pendaftaran akun baru | `arifinbuburanda@gmail.com` |

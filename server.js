@@ -39,7 +39,11 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
-const ADMIN_INITIAL_PASSWORD = 'AdminTerindo#2026';
+/* Kata sandi awal akun admin, dipakai hanya sekali saat data/db.json belum
+ * ada. Bisa dioverride lewat env var ADMIN_INITIAL_PASSWORD (disarankan untuk
+ * produksi, supaya nilainya tidak sama di semua instalasi / tidak tertulis
+ * di kode sumber publik). Perbaikan audit Okt 2026. */
+const ADMIN_INITIAL_PASSWORD = process.env.ADMIN_INITIAL_PASSWORD || 'AdminTerindo#2026';
 /* Alamat yang menerima notifikasi setiap ada pendaftaran akun baru yang
  * menunggu persetujuan. Bisa dioverride lewat env var ADMIN_NOTIFY_EMAIL. */
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'arifinbuburanda@gmail.com';
@@ -65,6 +69,24 @@ const COLLECTION_WRITE_ROLES = {
   activeIngredients: ['admin'],
   compatGroups: ['admin'],
   purchaseRequests: ['admin', 'warehouse', 'supervisor'],
+  /* Ditambahkan setelah audit keamanan (Okt 2026): koleksi di bawah ini
+   * sebelumnya hanya dijaga requireAuth — artinya SEMUA role yang login
+   * (termasuk Pekerja Lapangan) bisa mengubah/menghapus data ini lewat
+   * API langsung, walau UI-nya cuma menampilkan tombol untuk supervisor/
+   * agronomis. Terverifikasi lewat pengujian langsung (worker berhasil
+   * menghapus dailyReports & treatmentList milik user lain) — lihat
+   * laporan audit kode UPterindo Oktober 2026. */
+  scoutingSessions: ['agronomist', 'admin'],
+  treatmentList: ['agronomist', 'admin'],
+  dailyPlans: ['supervisor', 'admin'],
+  monthlyPlans: ['supervisor', 'admin'],
+  dailyReports: ['supervisor', 'admin'],
+  monthlyReports: ['supervisor', 'admin'],
+  greenReports: ['supervisor', 'admin'],
+  harvestReports: ['supervisor', 'admin'],
+  /* attendance & syncQueue tetap bisa ditulis siapa saja yang login —
+   * keduanya data operasional milik diri sendiri (check-in, antrean sync
+   * perangkat sendiri), bukan data lintas-tim seperti di atas. */
 };
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -739,6 +761,18 @@ app.post('/api/workorders', requireRole(...WO_ASSIGN_ROLES), (req, res) => {
   const db = loadDB();
   const worker = db.users.find(u => u.id === assignedTo);
   if (!worker) return res.status(400).json({ error: 'Pekerja tidak ditemukan.' });
+  /* Ditambahkan setelah audit keamanan (Okt 2026): pengecekan status produk
+   * sebelumnya cuma ada di tampilan (client), bisa dilewati dengan memanggil
+   * endpoint ini langsung. Ini bukan pengecekan sempurna — materialsPlanned
+   * cuma teks bebas, belum ada relasi formal ke productDb — tapi cukup untuk
+   * menangkap kasus jelas: nama produk yang statusnya bukan Approved disebut
+   * langsung di rencana bahan. */
+  if (materialsPlanned && Array.isArray(db.productDb)) {
+    const flagged = db.productDb.find(p => p.status && p.status !== 'Approved' && materialsPlanned.includes(p.name));
+    if (flagged) {
+      return res.status(400).json({ error: `Tidak bisa membuat tugas — produk "${flagged.name}" berstatus "${flagged.status}", bukan Approved.` });
+    }
+  }
   const wo = {
     id: newId('WO'),
     cropCycleId: cropCycleId || null,
