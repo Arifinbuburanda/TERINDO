@@ -52,6 +52,10 @@ const ROLE_LABELS = {
   supervisor: 'Supervisor / Mandor',
   agronomist: 'Agronomis',
   warehouse: 'Admin Gudang',
+  /* Ditambahkan Okt 2026 (V3.0 — Fase implementasi pertama, role login
+   * terpisah sesuai keputusan user, bukan digabung ke role existing). */
+  purchasing: 'Purchasing',
+  maintenance: 'Maintenance',
   admin: 'Administrator',
 };
 const VALID_ROLES = Object.keys(ROLE_LABELS);
@@ -87,6 +91,18 @@ const COLLECTION_WRITE_ROLES = {
   /* attendance & syncQueue tetap bisa ditulis siapa saja yang login —
    * keduanya data operasional milik diri sendiri (check-in, antrean sync
    * perangkat sendiri), bukan data lintas-tim seperti di atas. */
+
+  /* === Ditambahkan Okt 2026 — V3.0 Fase implementasi pertama === */
+  blocks: ['admin'],
+  commodities: ['admin'],
+  suppliers: ['admin', 'purchasing'],
+  purchaseOrders: ['admin', 'purchasing'],
+  assets: ['admin', 'maintenance'],
+  /* damageReports & maintenanceWorkOrders TIDAK memakai CRUD generik —
+   * aksesnya berbasis kepemilikan (siapa pun yang login boleh lapor
+   * kerusakan, mirip incomingReports), lihat rute khusus di bawah.
+   * purchaseInvoices juga TIDAK memakai CRUD generik — status "cocok"
+   * harus divalidasi server (3-way match), tidak boleh lewat PUT bebas. */
 };
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -243,6 +259,40 @@ const SEED_COLLECTIONS = {
 
   greenReports: [],
 
+  /* === Ditambahkan Okt 2026 — V3.0 Fase implementasi pertama ===
+   * blocks & commodities diisi dari data plot/komoditas yang SUDAH ada di
+   * cropCycles/sopList di atas (bukan data baru/rekaan) — ini migrasi teks
+   * bebas menjadi entitas master data yang sebelumnya cuma field `plot`
+   * dan `crop` bertipe string. Koleksi baru lainnya (suppliers,
+   * purchaseOrders, assets, damageReports, maintenanceWorkOrders,
+   * purchaseInvoices) sengaja dikosongkan — belum ada data sungguhan untuk
+   * bidang Purchasing/Maintenance ini, sesuai aturan proyek: tidak mengisi
+   * data rekaan. */
+  blocks: [
+    {id:'BLK-pabuaran-gh', name:'Greenhouse 1-3', locationId:'loc-pabuaran', locationName:'Pabuaran', notes:'3 unit greenhouse digabung sebagai satu blok (lihat siklus CC-2026-021).'},
+    {id:'BLK-pabuaran-terbuka', name:'Lahan Terbuka', locationId:'loc-pabuaran', locationName:'Pabuaran', notes:''},
+    {id:'BLK-parung-terbuka', name:'Lahan Terbuka', locationId:'loc-parung', locationName:'Parung', notes:''},
+    {id:'BLK-parung-buah', name:'Kebun Buah', locationId:'loc-parung', locationName:'Parung', notes:'Tanaman buah tahunan (durian, kelengkeng, alpukat, cempedak).'},
+  ],
+
+  commodities: [
+    {id:'KOM-cabai', name:'Cabai', category:'Sayuran'},
+    {id:'KOM-timun', name:'Timun', category:'Sayuran'},
+    {id:'KOM-melon', name:'Melon', category:'Sayuran/Buah Semusim'},
+    {id:'KOM-jagung', name:'Jagung', category:'Tanaman Pangan'},
+    {id:'KOM-durian', name:'Durian', category:'Buah Tahunan'},
+    {id:'KOM-kelengkeng', name:'Kelengkeng', category:'Buah Tahunan'},
+    {id:'KOM-alpukat', name:'Alpukat', category:'Buah Tahunan'},
+    {id:'KOM-cempedak', name:'Cempedak', category:'Buah Tahunan'},
+  ],
+
+  suppliers: [],
+  purchaseOrders: [],
+  purchaseInvoices: [],
+  assets: [],
+  damageReports: [],
+  maintenanceWorkOrders: [],
+
   pendingRegistrations: []
 };
 
@@ -301,6 +351,8 @@ const COLLECTIONS = [
   'productDb', 'activeIngredients', 'compatGroups', 'itemMaster', 'treatmentList',
   'dailyPlans', 'monthlyPlans', 'dailyReports', 'monthlyReports', 'greenReports',
   'locations', 'harvestReports',
+  /* Ditambahkan Okt 2026 — V3.0 Fase implementasi pertama */
+  'blocks', 'commodities', 'suppliers', 'purchaseOrders', 'assets',
 ];
 /* workOrders, incomingReports & stockTransactions TIDAK memakai CRUD generik
  * di atas — workOrders/incomingReports aksesnya berbasis kepemilikan, dan
@@ -311,6 +363,36 @@ const COLLECTIONS = [
 
 function newId(prefix) {
   return prefix + '-' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+}
+
+/* Ditambahkan Okt 2026 — V3.0 Fase implementasi pertama: itemMaster kini
+ * boleh (opsional, tidak wajib — data existing tanpa productId tetap
+ * valid) menyimpan field `productId` yang merujuk ke db.productDb. Ini
+ * memperkuat pengecekan "produk Suspended tidak boleh dipakai" (temuan
+ * audit kode Okt 2026 — sebelumnya cuma cocok nama teks di
+ * materialsPlanned, sekarang juga menangkap kasus nama di gudang berbeda
+ * sedikit dari nama katalog tapi sudah ditautkan lewat productId).
+ * Dipakai di /api/workorders (rencana bahan) dan /api/stock/receive
+ * (penerimaan barang gudang). */
+function findSuspendedProductMatch(db, materialsText) {
+  if (!materialsText || !Array.isArray(db.productDb)) return null;
+  const text = String(materialsText);
+  const byNameDirect = db.productDb.find(p => p.status && p.status !== 'Approved' && text.includes(p.name));
+  if (byNameDirect) return byNameDirect;
+  if (Array.isArray(db.itemMaster)) {
+    for (const item of db.itemMaster) {
+      if (!item.productId || !text.includes(item.name)) continue;
+      const linked = db.productDb.find(p => String(p.id) === String(item.productId) || p.name === item.productId);
+      if (linked && linked.status && linked.status !== 'Approved') return linked;
+    }
+  }
+  return null;
+}
+function suspendedProductForItem(db, itemId) {
+  const item = (db.itemMaster || []).find(i => String(i.id) === String(itemId));
+  if (!item || !item.productId) return null;
+  const linked = (db.productDb || []).find(p => String(p.id) === String(item.productId) || p.name === item.productId);
+  return (linked && linked.status && linked.status !== 'Approved') ? linked : null;
 }
 
 /* ===================== APP SETUP ===================== */
@@ -761,14 +843,14 @@ app.post('/api/workorders', requireRole(...WO_ASSIGN_ROLES), (req, res) => {
   const db = loadDB();
   const worker = db.users.find(u => u.id === assignedTo);
   if (!worker) return res.status(400).json({ error: 'Pekerja tidak ditemukan.' });
-  /* Ditambahkan setelah audit keamanan (Okt 2026): pengecekan status produk
-   * sebelumnya cuma ada di tampilan (client), bisa dilewati dengan memanggil
-   * endpoint ini langsung. Ini bukan pengecekan sempurna — materialsPlanned
-   * cuma teks bebas, belum ada relasi formal ke productDb — tapi cukup untuk
-   * menangkap kasus jelas: nama produk yang statusnya bukan Approved disebut
-   * langsung di rencana bahan. */
-  if (materialsPlanned && Array.isArray(db.productDb)) {
-    const flagged = db.productDb.find(p => p.status && p.status !== 'Approved' && materialsPlanned.includes(p.name));
+  /* Ditambahkan setelah audit keamanan (Okt 2026), diperkuat lagi Okt 2026
+   * (V3.0 fase implementasi pertama): pengecekan status produk sebelumnya
+   * cuma ada di tampilan (client), bisa dilewati dengan memanggil endpoint
+   * ini langsung — sudah diperbaiki. Sekarang juga menangkap kasus nama
+   * barang gudang berbeda sedikit dari nama katalog resmi, selama sudah
+   * ditautkan lewat itemMaster.productId (lihat findSuspendedProductMatch). */
+  {
+    const flagged = findSuspendedProductMatch(db, materialsPlanned);
     if (flagged) {
       return res.status(400).json({ error: `Tidak bisa membuat tugas — produk "${flagged.name}" berstatus "${flagged.status}", bukan Approved.` });
     }
@@ -952,7 +1034,7 @@ app.get('/api/stock/transactions', requireAuth, (req, res) => {
 });
 
 app.post('/api/stock/receive', requireRole('warehouse', 'admin'), (req, res) => {
-  const { itemId, qty, batch, expiry, po, condition } = req.body || {};
+  const { itemId, qty, batch, expiry, po, condition, purchaseOrderId } = req.body || {};
   const qtyNum = Number(qty);
   if (!itemId || !qtyNum || qtyNum <= 0) {
     return res.status(400).json({ error: 'Barang dan jumlah (lebih dari 0) wajib diisi.' });
@@ -960,6 +1042,36 @@ app.post('/api/stock/receive', requireRole('warehouse', 'admin'), (req, res) => 
   const db = loadDB();
   const item = (db.itemMaster || []).find(i => String(i.id) === String(itemId));
   if (!item) return res.status(404).json({ error: 'Barang tidak ditemukan.' });
+  /* Ditambahkan Okt 2026 (V3.0 fase implementasi pertama): kalau barang ini
+   * sudah ditautkan (lewat productId) ke katalog productDb yang statusnya
+   * bukan Approved (mis. Suspended), gudang TIDAK BOLEH menerima tambahan
+   * stok barang itu sama sekali — mencegah bahan yang sedang ditinjau ulang
+   * malah masuk ke gudang lebih dulu sebelum sempat dipakai di treatment. */
+  const suspended = suspendedProductForItem(db, item.id);
+  if (suspended) {
+    return res.status(400).json({ error: `Tidak bisa menerima "${item.name}" — produk ini berstatus "${suspended.status}" di katalog (bukan Approved).` });
+  }
+  /* Kalau penerimaan ini terkait Purchase Order (bidang Purchasing, baru di
+   * V3.0): catat qty yang BENAR-BENAR diterima di baris PO yang sesuai, dan
+   * perbarui status PO. Stok HANYA bertambah lewat jalur ini (bukan saat PO
+   * dibuat/dikirim) — sesuai aturan wajib di rencana V3.0. */
+  let purchaseOrder = null;
+  if (purchaseOrderId) {
+    purchaseOrder = (db.purchaseOrders || []).find(p => String(p.id) === String(purchaseOrderId));
+    if (!purchaseOrder) return res.status(404).json({ error: 'Purchase Order tidak ditemukan.' });
+    if (!Array.isArray(purchaseOrder.items)) purchaseOrder.items = [];
+    const line = purchaseOrder.items.find(l => String(l.itemId) === String(item.id));
+    if (!line) return res.status(400).json({ error: 'Barang ini tidak ada di daftar item Purchase Order tersebut.' });
+    const alreadyReceived = Number(line.qtyReceived) || 0;
+    const ordered = Number(line.qtyOrdered) || 0;
+    if (alreadyReceived + qtyNum > ordered) {
+      return res.status(400).json({ error: `Jumlah diterima (${alreadyReceived + qtyNum}) melebihi jumlah dipesan (${ordered}) untuk barang ini.` });
+    }
+    line.qtyReceived = alreadyReceived + qtyNum;
+    const fullyReceived = purchaseOrder.items.every(l => (Number(l.qtyReceived) || 0) >= (Number(l.qtyOrdered) || 0));
+    const partiallyReceived = purchaseOrder.items.some(l => (Number(l.qtyReceived) || 0) > 0);
+    purchaseOrder.status = fullyReceived ? 'received' : (partiallyReceived ? 'partial' : purchaseOrder.status);
+  }
   item.stock = (Number(item.stock) || 0) + qtyNum;
   const trx = {
     id: newId('TRX'),
@@ -970,7 +1082,8 @@ app.post('/api/stock/receive', requireRole('warehouse', 'admin'), (req, res) => 
     unit: item.unit || '-',
     batch: batch || '-',
     expiry: expiry || null,
-    po: po || '-',
+    po: purchaseOrder ? purchaseOrder.id : (po || '-'),
+    purchaseOrderId: purchaseOrder ? purchaseOrder.id : null,
     condition: condition || 'Baik',
     createdBy: req.currentUser.id,
     createdByName: req.currentUser.name,
@@ -979,11 +1092,11 @@ app.post('/api/stock/receive', requireRole('warehouse', 'admin'), (req, res) => 
   if (!db.stockTransactions) db.stockTransactions = [];
   db.stockTransactions.unshift(trx);
   saveDB();
-  res.status(201).json({ transaction: trx, item });
+  res.status(201).json({ transaction: trx, item, purchaseOrder });
 });
 
 app.post('/api/stock/issue', requireRole('warehouse', 'admin'), (req, res) => {
-  const { itemId, qty, workOrderId, recipient, reason, batch } = req.body || {};
+  const { itemId, qty, workOrderId, maintenanceWorkOrderId, recipient, reason, batch } = req.body || {};
   const qtyNum = Number(qty);
   if (!itemId || !qtyNum || qtyNum <= 0) {
     return res.status(400).json({ error: 'Barang dan jumlah (lebih dari 0) wajib diisi.' });
@@ -1005,6 +1118,11 @@ app.post('/api/stock/issue', requireRole('warehouse', 'admin'), (req, res) => {
     unit: item.unit || '-',
     batch: batch || '-',
     workOrderId: workOrderId || null,
+    /* Ditambahkan Okt 2026 — bidang Maintenance (baru): material yang
+     * dipakai work order perbaikan tetap mengurangi stok lewat jalur ini
+     * (Gudang satu-satunya yang mengubah angka stok), hanya ditandai
+     * asalnya dari work order Maintenance mana. */
+    maintenanceWorkOrderId: maintenanceWorkOrderId || null,
     recipient: recipient || '-',
     reason: reason || '-',
     createdBy: req.currentUser.id,
@@ -1013,8 +1131,238 @@ app.post('/api/stock/issue', requireRole('warehouse', 'admin'), (req, res) => {
   };
   if (!db.stockTransactions) db.stockTransactions = [];
   db.stockTransactions.unshift(trx);
+  if (maintenanceWorkOrderId) {
+    const mwo = (db.maintenanceWorkOrders || []).find(w => String(w.id) === String(maintenanceWorkOrderId));
+    if (mwo) {
+      if (!Array.isArray(mwo.materialsUsed)) mwo.materialsUsed = [];
+      mwo.materialsUsed.push({ itemId: item.id, itemName: item.name, qty: qtyNum, unit: item.unit || '-', stockTransactionId: trx.id });
+    }
+  }
   saveDB();
   res.status(201).json({ transaction: trx, item });
+});
+
+/* ===================== PURCHASING (bidang baru, V3.0) ===================== */
+/* suppliers, purchaseOrders & assets memakai CRUD generik di bawah (lihat
+ * COLLECTIONS). purchaseInvoices TIDAK — status "matched" harus lewat
+ * pengecekan 3-way-match di server, tidak boleh diset bebas lewat PUT,
+ * sesuai rencana V3.0 §9 (acceptance criteria "Invoice 3-way match"). */
+const PURCHASING_ROLES = ['purchasing', 'admin'];
+const INVOICE_MATCH_TOLERANCE = 0.01; // 1% — toleransi pembulatan kecil, bukan izin selisih besar
+
+app.get('/api/purchaseInvoices', requireAuth, (req, res) => {
+  const db = loadDB();
+  res.json(db.purchaseInvoices || []);
+});
+app.get('/api/purchaseInvoices/:id', requireAuth, (req, res) => {
+  const db = loadDB();
+  const inv = (db.purchaseInvoices || []).find(i => i.id === req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Invoice tidak ditemukan.' });
+  res.json(inv);
+});
+app.post('/api/purchaseInvoices', requireRole(...PURCHASING_ROLES), (req, res) => {
+  const { purchaseOrderId, invoiceNo, amount, notes } = req.body || {};
+  const amountNum = Number(amount);
+  if (!purchaseOrderId || !invoiceNo || !amountNum || amountNum <= 0) {
+    return res.status(400).json({ error: 'Purchase Order, nomor invoice, dan jumlah (lebih dari 0) wajib diisi.' });
+  }
+  const db = loadDB();
+  const po = (db.purchaseOrders || []).find(p => String(p.id) === String(purchaseOrderId));
+  if (!po) return res.status(404).json({ error: 'Purchase Order tidak ditemukan.' });
+  const inv = {
+    id: newId('INV'),
+    purchaseOrderId: po.id,
+    supplierId: po.supplierId || null,
+    supplierName: po.supplierName || '-',
+    invoiceNo: String(invoiceNo).trim(),
+    amount: amountNum,
+    matchStatus: 'pending', // pending | matched | discrepancy — hanya diubah lewat action "verify" di bawah
+    paymentStatus: 'unpaid', // cermin saja — pembayaran sungguhan dicatat final di modul Keuangan (belum dibangun)
+    notes: notes || '',
+    createdBy: req.currentUser.id,
+    createdByName: req.currentUser.name,
+    createdAt: new Date().toISOString(),
+  };
+  if (!db.purchaseInvoices) db.purchaseInvoices = [];
+  db.purchaseInvoices.unshift(inv);
+  saveDB();
+  res.status(201).json(inv);
+});
+app.put('/api/purchaseInvoices/:id', requireRole(...PURCHASING_ROLES), (req, res) => {
+  const db = loadDB();
+  const inv = (db.purchaseInvoices || []).find(i => i.id === req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Invoice tidak ditemukan.' });
+  const body = req.body || {};
+  if (body.action === 'verify') {
+    const po = (db.purchaseOrders || []).find(p => String(p.id) === String(inv.purchaseOrderId));
+    if (!po) return res.status(404).json({ error: 'Purchase Order terkait tidak ditemukan.' });
+    const totalReceivedValue = (po.items || []).reduce((sum, l) => sum + (Number(l.qtyReceived) || 0) * (Number(l.price) || 0), 0);
+    const hasAnyReceipt = (po.items || []).some(l => (Number(l.qtyReceived) || 0) > 0);
+    const diffRatio = totalReceivedValue > 0 ? Math.abs(inv.amount - totalReceivedValue) / totalReceivedValue : 1;
+    /* Dicek server, bukan cuma klien — invoice yang jumlahnya tidak cocok
+     * dengan nilai barang yang BENAR-BENAR sudah diterima (bukan sekadar
+     * yang dipesan), atau belum ada penerimaan sama sekali, TIDAK BOLEH
+     * lolos ke status "matched" walau tombolnya ditekan. */
+    if (!hasAnyReceipt) {
+      inv.matchStatus = 'discrepancy';
+      inv.matchNote = 'Belum ada barang yang diterima/diverifikasi untuk PO ini — invoice tidak bisa dicocokkan.';
+    } else if (diffRatio > INVOICE_MATCH_TOLERANCE) {
+      inv.matchStatus = 'discrepancy';
+      inv.matchNote = `Nilai invoice (Rp ${inv.amount.toLocaleString('id-ID')}) berbeda dari nilai barang diterima (Rp ${totalReceivedValue.toLocaleString('id-ID')}).`;
+    } else {
+      inv.matchStatus = 'matched';
+      inv.matchNote = '';
+    }
+    inv.verifiedBy = req.currentUser.id;
+    inv.verifiedByName = req.currentUser.name;
+    inv.verifiedAt = new Date().toISOString();
+  } else if (body.action === undefined) {
+    if (inv.matchStatus !== 'pending') return res.status(400).json({ error: 'Invoice yang sudah diverifikasi tidak bisa diubah isinya lagi.' });
+    ['invoiceNo', 'amount', 'notes'].forEach(k => { if (body[k] !== undefined) inv[k] = body[k]; });
+  } else {
+    return res.status(400).json({ error: 'Aksi tidak dikenali.' });
+  }
+  inv.updatedAt = new Date().toISOString();
+  saveDB();
+  res.json(inv);
+});
+app.delete('/api/purchaseInvoices/:id', requireRole(...PURCHASING_ROLES), (req, res) => {
+  const db = loadDB();
+  const list = db.purchaseInvoices || [];
+  const idx = list.findIndex(i => i.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Invoice tidak ditemukan.' });
+  if (list[idx].matchStatus !== 'pending' && req.currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Invoice yang sudah diverifikasi hanya bisa dihapus Administrator.' });
+  }
+  const [removed] = list.splice(idx, 1);
+  saveDB();
+  res.json(removed);
+});
+
+/* ===================== MAINTENANCE (bidang baru, V3.0) ===================== */
+/* assets memakai CRUD generik (lihat COLLECTIONS). damageReports &
+ * maintenanceWorkOrders TIDAK — aksesnya berbasis kepemilikan (siapa pun
+ * boleh lapor kerusakan, meniru pola incomingReports yang sudah terbukti
+ * benar di audit kode), dan work order meniru state machine workOrders. */
+const MAINT_REVIEW_ROLES = ['maintenance', 'admin'];
+
+app.get('/api/damageReports', requireAuth, (req, res) => {
+  const db = loadDB();
+  res.json(db.damageReports || []);
+});
+app.post('/api/damageReports', requireAuth, (req, res) => {
+  const { assetId, assetName, description, severity } = req.body || {};
+  if (!description) return res.status(400).json({ error: 'Deskripsi kerusakan wajib diisi.' });
+  const db = loadDB();
+  const record = {
+    id: newId('DMG'),
+    assetId: assetId || null,
+    assetName: assetName || '-',
+    description: String(description).trim(),
+    severity: ['tinggi', 'sedang', 'rendah'].includes(severity) ? severity : 'sedang',
+    status: 'Menunggu',
+    reportedBy: req.currentUser.id,
+    reportedByName: req.currentUser.name,
+    createdAt: new Date().toISOString(),
+  };
+  if (!db.damageReports) db.damageReports = [];
+  db.damageReports.unshift(record);
+  saveDB();
+  res.status(201).json(record);
+});
+app.put('/api/damageReports/:id', requireAuth, (req, res) => {
+  const db = loadDB();
+  const r = (db.damageReports || []).find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: 'Laporan tidak ditemukan.' });
+  const user = req.currentUser;
+  const body = req.body || {};
+  if (MAINT_REVIEW_ROLES.includes(user.role)) {
+    if (body.action === 'periksa') r.status = 'Diperiksa';
+    else if (body.action === 'estimasi') { r.status = 'Menunggu Persetujuan'; r.estimasiBiaya = Number(body.estimasiBiaya) || 0; }
+    else if (body.action === 'tolak') { r.status = 'Ditolak'; r.reviewNote = body.reviewNote || ''; }
+    else if (body.action === 'selesai') r.status = 'Selesai';
+    else return res.status(400).json({ error: 'Aksi tidak dikenali.' });
+  } else {
+    if (r.reportedBy !== user.id) return res.status(403).json({ error: 'Anda hanya bisa mengubah laporan milik Anda sendiri.' });
+    if (r.status !== 'Menunggu') return res.status(400).json({ error: 'Laporan yang sudah diproses tidak bisa diubah lagi.' });
+    ['description', 'severity', 'assetId', 'assetName'].forEach(k => { if (body[k] !== undefined) r[k] = body[k]; });
+  }
+  r.updatedAt = new Date().toISOString();
+  saveDB();
+  res.json(r);
+});
+app.delete('/api/damageReports/:id', requireAuth, (req, res) => {
+  const db = loadDB();
+  const list = db.damageReports || [];
+  const idx = list.findIndex(x => x.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Laporan tidak ditemukan.' });
+  const r = list[idx];
+  const user = req.currentUser;
+  const isOwner = r.reportedBy === user.id && r.status === 'Menunggu';
+  if (!isOwner && !MAINT_REVIEW_ROLES.includes(user.role)) return res.status(403).json({ error: 'Tidak memiliki akses.' });
+  list.splice(idx, 1);
+  saveDB();
+  res.json(r);
+});
+
+app.get('/api/maintenanceWorkOrders', requireAuth, (req, res) => {
+  const db = loadDB();
+  res.json(db.maintenanceWorkOrders || []);
+});
+app.post('/api/maintenanceWorkOrders', requireRole(...MAINT_REVIEW_ROLES), (req, res) => {
+  const { damageReportId, assetId, assetName, estimasiBiaya, assignedTo, notes } = req.body || {};
+  if (!assetId) return res.status(400).json({ error: 'Aset wajib diisi.' });
+  const db = loadDB();
+  const mwo = {
+    id: newId('MWO'),
+    damageReportId: damageReportId || null,
+    assetId, assetName: assetName || '-',
+    estimasiBiaya: Number(estimasiBiaya) || 0,
+    materialsUsed: [],
+    status: 'assigned', // assigned -> in_progress -> submitted -> approved (meniru workOrders)
+    assignedTo: assignedTo || req.currentUser.id,
+    notes: notes || '',
+    createdBy: req.currentUser.id,
+    createdByName: req.currentUser.name,
+    createdAt: new Date().toISOString(),
+  };
+  if (!db.maintenanceWorkOrders) db.maintenanceWorkOrders = [];
+  db.maintenanceWorkOrders.unshift(mwo);
+  if (damageReportId) {
+    const dmg = (db.damageReports || []).find(d => d.id === damageReportId);
+    if (dmg) { dmg.status = 'Disetujui'; dmg.maintenanceWorkOrderId = mwo.id; }
+  }
+  saveDB();
+  res.status(201).json(mwo);
+});
+app.put('/api/maintenanceWorkOrders/:id', requireRole(...MAINT_REVIEW_ROLES), (req, res) => {
+  const db = loadDB();
+  const mwo = (db.maintenanceWorkOrders || []).find(w => w.id === req.params.id);
+  if (!mwo) return res.status(404).json({ error: 'Work order tidak ditemukan.' });
+  const body = req.body || {};
+  const TRANSITIONS = { start: 'in_progress', submit: 'submitted', approve: 'approved', cancel: 'cancelled' };
+  if (body.action && TRANSITIONS[body.action]) {
+    mwo.status = TRANSITIONS[body.action];
+    if (body.action === 'submit' && body.notes !== undefined) mwo.notes = body.notes;
+    if (body.action === 'approve') mwo.closedAt = new Date().toISOString();
+  } else if (!body.action) {
+    ['estimasiBiaya', 'notes', 'assignedTo'].forEach(k => { if (body[k] !== undefined) mwo[k] = body[k]; });
+  } else {
+    return res.status(400).json({ error: 'Aksi tidak dikenali.' });
+  }
+  mwo.updatedAt = new Date().toISOString();
+  saveDB();
+  res.json(mwo);
+});
+app.delete('/api/maintenanceWorkOrders/:id', requireRole(...MAINT_REVIEW_ROLES), (req, res) => {
+  const db = loadDB();
+  const list = db.maintenanceWorkOrders || [];
+  const idx = list.findIndex(w => w.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Work order tidak ditemukan.' });
+  if (list[idx].status !== 'assigned') return res.status(400).json({ error: 'Work order yang sudah berjalan tidak bisa dihapus, batalkan saja (action: cancel).' });
+  const [removed] = list.splice(idx, 1);
+  saveDB();
+  res.json(removed);
 });
 
 /* ===================== CRUD GENERIK UNTUK SEMUA MODUL ===================== */

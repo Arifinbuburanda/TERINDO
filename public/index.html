@@ -29,6 +29,21 @@
   button{ transition:filter .15s ease, transform .08s ease, box-shadow .15s ease; }
   button:active{ transform:translateY(1px); }
   button[style*="var(--green-600)"]:hover{ filter:brightness(1.07); box-shadow:0 2px 8px rgba(22,163,74,.25); }
+  button:disabled{ opacity:.55; cursor:not-allowed; filter:none !important; transform:none !important; box-shadow:none !important; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{ outline:2px solid var(--green-600); outline-offset:2px; }
+
+  /* ===== Sistem tombol terpadu — dipakai untuk aksi utama, supaya konsisten & mudah dikembangkan ===== */
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:44px; padding:10px 18px; border-radius:10px; font-weight:700; font-size:13.5px; white-space:nowrap; border:1px solid transparent; }
+  .btn-block{ display:flex; width:100%; }
+  .btn-sm{ min-height:36px; padding:7px 13px; font-size:12.5px; border-radius:8px; }
+  .btn-primary{ background:var(--green-600); color:white; box-shadow:0 1px 2px rgba(15,36,25,.12); }
+  .btn-primary:hover{ filter:brightness(1.07); box-shadow:0 2px 8px rgba(22,163,74,.25); }
+  .btn-secondary{ background:white; color:#374151; border-color:#d1d5db; }
+  .btn-secondary:hover{ background:#f7f9f7; border-color:#b9c1bc; }
+  .btn-danger{ background:white; color:var(--red-700); border-color:#fecaca; }
+  .btn-danger:hover{ background:var(--red-100); }
+  .btn-ghost{ background:transparent; color:#4b5b52; }
+  .btn-ghost:hover{ background:#f0f2f0; }
   .decor-blob{position:absolute; border-radius:999px; filter:blur(2px); opacity:.55; pointer-events:none; z-index:0;}
   .login-wrap{position:relative; overflow:hidden;}
   .login-dotgrid{position:absolute; inset:0; z-index:0; opacity:.5;
@@ -170,10 +185,19 @@
     #user-chip{ min-width:0; flex-wrap:nowrap; }
     .phone-shell{ width:100%; max-width:420px; margin:0 auto; border-radius:0; padding:0; box-shadow:none; background:transparent; }
     .phone-screen{ border-radius:16px; height:auto; min-height:70vh; }
+    .status-bar{ padding:calc(env(safe-area-inset-top,0px) + 8px) 16px 4px; }
+    .phone-content{ padding-bottom:calc(96px + env(safe-area-inset-bottom,0px)); }
+    /* Navigasi bawah harus selalu bisa dijangkau, walau daftar tugas/riwayat panjang */
+    .bottom-nav{ position:fixed; bottom:0; left:0; right:0; max-width:420px; margin:0 auto; padding-bottom:calc(10px + env(safe-area-inset-bottom,0px)); z-index:45; }
     #detail-panel{ width:100%; max-width:100%; }
     table.data-table{ display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap; }
     #s-kanban-board{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:6px; }
     .kanban-col{ min-width:76vw; }
+    /* Petunjuk visual: ada konten lain di sisi kanan yang bisa di-scroll */
+    #role-tabs, .sidebar{ -webkit-mask-image:linear-gradient(90deg, transparent, black 12px, black calc(100% - 24px), transparent); mask-image:linear-gradient(90deg, transparent, black 12px, black calc(100% - 24px), transparent); }
+    /* Panel peta/health map & panel sejenis (daftar + sidebar info) ditumpuk vertikal di layar sempit */
+    [data-s="peta"] > .flex, [data-a="health"] > .flex{ flex-direction:column; }
+    [data-s="peta"] > .flex > div[style*="width:230px"], [data-a="health"] > .flex > div[style*="width:250px"]{ width:100% !important; }
   }
   @media (max-width: 480px){
     [class*="grid-cols-2"], [class*="grid-cols-3"], [class*="grid-cols-4"]{ grid-template-columns:repeat(1,minmax(0,1fr)) !important; }
@@ -207,6 +231,8 @@
         <button class="roletab" id="tab-agronomist" onclick="switchRole('agronomist')">Agronomis</button>
         <button class="roletab" id="tab-warehouse" onclick="switchRole('warehouse')">Gudang</button>
         <button class="roletab" id="tab-admin" onclick="switchRole('admin')">Admin</button>
+        <button class="roletab" id="tab-purchasing" onclick="switchRole('purchasing')">Purchasing</button>
+        <button class="roletab" id="tab-maintenance" onclick="switchRole('maintenance')">Maintenance</button>
       </div>
       <div class="hidden items-center gap-2" id="user-chip">
         <button class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/20 text-green-100" onclick="openSettings()">⚙<span class="hidden sm:inline"> Status AI </span><span id="ai-status-pill" class="hidden sm:inline" style="color:#fde68a;">○ AI Simulasi</span></button>
@@ -294,13 +320,12 @@
 <!-- ROLE: FIELD WORKER (mobile) -->
 <!-- ============================================================ -->
 <div class="role-panel active" id="role-worker">
-  <p class="text-center text-xs text-gray-400 mb-2">Tampilan mobile-first — pekerja lapangan hanya melihat tindakan penting</p>
   <div class="phone-shell">
     <div class="phone-screen">
       <div class="status-bar">
-        <span>09:24</span>
+        <span id="worker-clock">--:--</span>
         <span>UPterindo</span>
-        <span>●●● 4G</span>
+        <span id="worker-team-label">&nbsp;</span>
       </div>
 
       <div class="phone-content">
@@ -313,19 +338,15 @@
           <div class="card p-3 mb-3" style="background:linear-gradient(135deg,#16a34a,#0f2419); border:none;">
             <div class="flex justify-between items-center text-white">
               <div>
-                <p class="text-[11px] opacity-80">Pabuaran · Greenhouse 1</p>
-                <p class="font-bold text-sm">3 tugas hari ini · 1 selesai</p>
-              </div>
-              <div class="text-right">
-                <p class="text-lg font-extrabold">29°C</p>
-                <p class="text-[10px] opacity-80">Cerah berawan</p>
+                <p class="text-[11px] opacity-80" id="worker-loc-label">Lokasi belum diatur</p>
+                <p class="font-bold text-sm" id="worker-task-summary">Memuat tugas…</p>
               </div>
             </div>
           </div>
 
-          <div class="card p-3 mb-3" style="background:var(--amber-100); border-color:#fde68a;">
-            <p class="text-[12.5px] font-bold text-amber-800">⚠ Ambang hama terlampaui</p>
-            <p class="text-[11.5px] text-amber-700 mt-0.5">Ulat grayak di Blok A3 melebihi threshold. Agronomis sedang meninjau rekomendasi treatment.</p>
+          <div class="card p-3 mb-3 hidden" id="worker-pest-alert" style="background:var(--amber-100); border-color:#fde68a;">
+            <p class="text-[12.5px] font-bold text-amber-800" id="worker-pest-title">⚠ Ambang hama terlampaui</p>
+            <p class="text-[11.5px] text-amber-700 mt-0.5" id="worker-pest-desc"></p>
           </div>
 
           <div class="flex justify-between items-center mb-2">
@@ -435,6 +456,9 @@
         <div class="screen" data-w="riwayat">
           <h2 class="text-base font-extrabold text-gray-900 mb-3">Riwayat Saya</h2>
           <div id="w-riwayat-list" class="space-y-2"></div>
+          <h2 class="text-base font-extrabold text-gray-900 mb-3 mt-5">Laporan Masalah Saya</h2>
+          <p class="text-[11px] text-gray-400 mb-2">Laporan berstatus "Menunggu" masih bisa Anda edit.</p>
+          <div id="w-lapor-history-list" class="space-y-2"></div>
         </div>
 
         <!-- w-sync -->
@@ -485,29 +509,26 @@
 
       <div class="screen active" data-s="dashboard">
         <h1 class="text-lg font-extrabold text-gray-900 mb-1">Command Center</h1>
-        <p class="text-[12.5px] text-gray-500 mb-1">Rabu, 12 Agustus 2026</p>
-        <p class="text-[10.5px] text-gray-400 mb-4">Data terakhir diperbarui 08:00 WIB — 18 crop cycle, 5 plot, 6 akun aktif dipantau</p>
+        <p class="text-[12.5px] text-gray-500 mb-1" id="s-dash-date"></p>
+        <p class="text-[10.5px] text-gray-400 mb-4" id="s-dash-meta">Memuat data…</p>
         <div class="grid grid-cols-4 gap-3 mb-5">
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Tugas Hari Ini</p><p class="text-xl font-extrabold text-gray-900">18</p><p class="text-[11px] text-green-700">6 selesai</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">On-time Completion</p><p class="text-xl font-extrabold text-gray-900">91%</p><p class="text-[11px] text-green-700">▲ 3% vs minggu lalu</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Masalah Kritis Terbuka</p><p class="text-xl font-extrabold text-red-600">2</p><p class="text-[11px] text-red-500">Perlu tindakan</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Kehadiran Tim</p><p class="text-xl font-extrabold text-gray-900">27/29</p><p class="text-[11px] text-amber-600">2 izin</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Tugas Hari Ini</p><p class="text-xl font-extrabold text-gray-900" id="s-stat-tugas">0</p><p class="text-[11px] text-green-700" id="s-stat-tugas-sub">0 selesai</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Tingkat Penyelesaian</p><p class="text-xl font-extrabold text-gray-900" id="s-stat-completion">—</p><p class="text-[11px] text-gray-400" id="s-stat-completion-sub">dari seluruh tugas aktif</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Masalah Kritis Terbuka</p><p class="text-xl font-extrabold text-red-600" id="s-stat-kritis">0</p><p class="text-[11px] text-red-500" id="s-stat-kritis-sub">Tidak ada</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Kehadiran Tim Hari Ini</p><p class="text-xl font-extrabold text-gray-900" id="s-stat-hadir">—</p><p class="text-[11px] text-amber-600" id="s-stat-hadir-sub">Belum ada data</p></div>
         </div>
 
         <p class="font-bold text-sm text-gray-800 mb-2">Perlu perhatian</p>
-        <div class="space-y-2 mb-5">
-          <div class="card p-3 flex justify-between items-center"><span class="text-[13px]">Ambang hama terlampaui — Greenhouse 1, Pabuaran</span><span class="badge b-red">Kritis</span></div>
-          <div class="card p-3 flex justify-between items-center"><span class="text-[13px]">3 laporan menunggu verifikasi &gt; 2 jam</span><span class="badge b-amber">Perlu review</span></div>
-          <div class="card p-3 flex justify-between items-center"><span class="text-[13px]">Stok Mankozeb 80WP mendekati minimum</span><span class="badge b-amber">Stok</span></div>
+        <div class="space-y-2 mb-5" id="s-perlu-perhatian">
         </div>
 
-        <p class="font-bold text-sm text-gray-800 mb-2">Status pekerjaan hari ini</p>
+        <p class="font-bold text-sm text-gray-800 mb-2">Status pekerjaan (semua work order)</p>
         <div class="flex gap-2" id="s-status-tiles">
-          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-gray-700">3</p><p class="text-[10.5px] text-gray-500">Draft</p></div>
-          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-blue-700">5</p><p class="text-[10.5px] text-gray-500">Assigned</p></div>
-          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-amber-700">4</p><p class="text-[10.5px] text-gray-500">In Progress</p></div>
-          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-indigo-700">3</p><p class="text-[10.5px] text-gray-500">Submitted</p></div>
-          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-green-700">6</p><p class="text-[10.5px] text-gray-500">Approved</p></div>
+          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-blue-700" id="s-st-assigned">0</p><p class="text-[10.5px] text-gray-500">Ditugaskan</p></div>
+          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-amber-700" id="s-st-inprogress">0</p><p class="text-[10.5px] text-gray-500">Dikerjakan</p></div>
+          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-red-600" id="s-st-revision">0</p><p class="text-[10.5px] text-gray-500">Revisi</p></div>
+          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-indigo-700" id="s-st-submitted">0</p><p class="text-[10.5px] text-gray-500">Menunggu Review</p></div>
+          <div class="flex-1 card p-2.5 text-center"><p class="text-lg font-extrabold text-green-700" id="s-st-approved">0</p><p class="text-[10.5px] text-gray-500">Disetujui</p></div>
         </div>
       </div>
 
@@ -612,20 +633,15 @@
       <div class="screen" data-s="peta">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Peta Lahan — Pabuaran &amp; Parung</h1>
         <div class="flex gap-4">
-          <div class="flex-1 fake-map" id="s-map">
-            <div class="plot-poly" style="left:20px; top:24px; width:120px; height:90px; background:#16a34a;" onclick="openPlot('A1')">A1 · Melon</div>
-            <div class="plot-poly" style="left:160px; top:24px; width:100px; height:90px; background:#dc2626;" onclick="openPlot('A3')">A3 · Cabai</div>
-            <div class="plot-poly" style="left:280px; top:24px; width:110px; height:90px; background:#16a34a;" onclick="openPlot('A5')">A5 · Jagung</div>
-            <div class="plot-poly" style="left:20px; top:140px; width:150px; height:80px; background:#ca8a04;" onclick="openPlot('B2')">B2 · Melon</div>
-            <div class="plot-poly" style="left:190px; top:140px; width:130px; height:80px; background:#16a34a;" onclick="openPlot('B4')">B4 · Cabai</div>
+          <div class="flex-1" id="s-map">
+            <div class="grid grid-cols-2 gap-3" id="s-map-cyclelist"></div>
           </div>
           <div style="width:230px;">
-            <p class="font-bold text-[12.5px] text-gray-700 mb-2">Legenda kesehatan</p>
-            <div class="flex items-center gap-2 text-[12px] mb-1.5"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;"></span>Sehat</div>
-            <div class="flex items-center gap-2 text-[12px] mb-1.5"><span style="width:12px;height:12px;background:#ca8a04;border-radius:3px;"></span>Perlu pantau</div>
-            <div class="flex items-center gap-2 text-[12px] mb-3"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;"></span>Kritis</div>
-            <p class="font-bold text-[12.5px] text-gray-700 mb-2">5 plot ditampilkan</p>
-            <p class="text-[11px] text-gray-500">Klik salah satu plot pada peta untuk melihat crop cycle, luas, dan status terkini.</p>
+            <p class="font-bold text-[12.5px] text-gray-700 mb-2">Legenda status</p>
+            <div class="flex items-center gap-2 text-[12px] mb-1.5"><span class="badge b-green">ACTIVE</span>crop cycle berjalan</div>
+            <div class="flex items-center gap-2 text-[12px] mb-1.5"><span class="badge b-red">Kritis</span>ada laporan masalah severity tinggi belum ditangani</div>
+            <p class="font-bold text-[12.5px] text-gray-700 mb-2 mt-3" id="s-map-count">0 crop cycle ditampilkan</p>
+            <p class="text-[11px] text-gray-500">Klik salah satu kartu untuk melihat detail crop cycle. Peta visual per petak akan tersedia setelah data koordinat/scouting lapangan mulai dicatat.</p>
           </div>
         </div>
       </div>
@@ -733,19 +749,12 @@
       <div class="screen" data-a="health">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Crop Health Map</h1>
         <div class="flex gap-4">
-          <div class="flex-1 fake-map">
-            <div class="plot-poly" style="left:20px; top:24px; width:120px; height:90px; background:#16a34a;">A1</div>
-            <div class="plot-poly" style="left:160px; top:24px; width:100px; height:90px; background:#dc2626;">A3</div>
-            <div class="plot-poly" style="left:280px; top:24px; width:110px; height:90px; background:#16a34a;">A5</div>
-            <div class="plot-poly" style="left:20px; top:140px; width:150px; height:80px; background:#ca8a04;">B2</div>
-            <div class="plot-poly" style="left:190px; top:140px; width:130px; height:80px; background:#16a34a;">B4</div>
+          <div class="flex-1">
+            <div class="grid grid-cols-2 gap-3" id="a-health-cyclelist"></div>
           </div>
           <div style="width:250px;">
             <p class="font-bold text-[12.5px] text-gray-700 mb-2">Plot risiko tertinggi</p>
-            <div class="space-y-2">
-              <div class="card p-2.5"><p class="text-[12.5px] font-bold">Blok A3 — Cabai</p><p class="text-[11px] text-gray-500">Ulat grayak · severity 4/5 · 18% area</p></div>
-              <div class="card p-2.5"><p class="text-[12.5px] font-bold">Blok B2 — Melon</p><p class="text-[11px] text-gray-500">Defisiensi Ca · severity 2/5 · 9% area</p></div>
-            </div>
+            <div class="space-y-2" id="a-health-risklist"></div>
           </div>
         </div>
       </div>
@@ -803,12 +812,7 @@
           <p class="font-bold text-[13px] text-gray-800 mb-3">Buat Treatment Baru (tanpa observation sumber)</p>
           <div class="grid grid-cols-2 gap-3 mb-3">
             <div><label class="field-label">Plot / Crop Cycle</label>
-              <select id="tr-plot">
-                <option>Blok A1 — Melon (CC-2026-011)</option>
-                <option>Blok A3 — Cabai (CC-2026-018)</option>
-                <option>Blok B2 — Melon (CC-2026-014)</option>
-                <option>Blok C1 — Jagung (CC-2026-009)</option>
-              </select>
+              <select id="tr-plot"><option value="">— Pilih crop cycle —</option></select>
             </div>
             <div><label class="field-label">Jenis treatment</label>
               <select id="tr-type">
@@ -884,32 +888,23 @@
 
       <div class="screen" data-a="soil">
         <h1 class="text-lg font-extrabold text-gray-900 mb-4">Soil, Water &amp; Liming</h1>
-        <p class="font-bold text-[13px] text-gray-800 mb-2">Hasil uji tanah terbaru</p>
-        <table class="data-table mb-4"><thead><tr><th>Plot</th><th>pH</th><th>Organic Matter</th><th>CEC</th><th>Rekomendasi</th></tr></thead>
-        <tbody>
-          <tr><td>Blok A1</td><td>5.6</td><td>2.8%</td><td>14 cmol/kg</td><td><span class="badge b-amber">Perlu pengapuran</span></td></tr>
-          <tr><td>Blok B2</td><td>6.4</td><td>3.5%</td><td>18 cmol/kg</td><td><span class="badge b-green">Optimal</span></td></tr>
-          <tr><td>Blok A5</td><td>5.9</td><td>3.1%</td><td>15 cmol/kg</td><td><span class="badge b-green">Optimal</span></td></tr>
-        </tbody></table>
-        <p class="font-bold text-[13px] text-gray-800 mb-2">Zona irigasi &amp; fertigasi</p>
-        <table class="data-table"><thead><tr><th>Zona</th><th>Sumber Air</th><th>Target EC</th><th>EC Aktual</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>Zona 1 — A1/A3</td><td>Sumur bor 1</td><td>1.8 mS/cm</td><td>1.9 mS/cm</td><td><span class="badge b-green">Sesuai</span></td></tr>
-          <tr><td>Zona 2 — B2/B4</td><td>Embung</td><td>2.0 mS/cm</td><td>2.4 mS/cm</td><td><span class="badge b-amber">Menyimpang</span></td></tr>
-        </tbody></table>
+        <!-- Perbaikan audit Okt 2026: tabel di tab ini dulu berisi data uji tanah &
+             zona irigasi yang 100% statis (Blok A1/B2/A5, Zona 1/2) — tidak pernah
+             berubah mengikuti data asli karena modul ini memang belum punya model
+             data di backend (tidak ada koleksi soilTests/irrigationZones). Daripada
+             menampilkan angka seolah nyata, ditampilkan jujur belum tersedia sampai
+             modul ini dirancang & dibangun. -->
+        <div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Modul Soil, Water &amp; Liming belum tersedia — pencatatan uji tanah dan zona irigasi/fertigasi belum punya tempat penyimpanan data di sistem ini. Perlu dirancang dulu (apa yang dicatat, per plot atau per zona, siapa yang input) sebelum dibangun.</p></div>
       </div>
 
       <div class="screen" data-a="analytics">
         <h1 class="text-lg font-extrabold text-gray-900 mb-1">Analytics</h1>
-        <p class="text-[12px] text-gray-500 mb-4">Filter: Periode · Kebun · Plot · Komoditas · Crop Cycle · Tim · Tahap pertumbuhan</p>
-        <div class="grid grid-cols-3 gap-3">
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Germination Rate</p><p class="text-xl font-extrabold">94%</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Treatment Effectiveness</p><p class="text-xl font-extrabold">71%</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Yield Achievement</p><p class="text-xl font-extrabold">88%</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Input Variance</p><p class="text-xl font-extrabold text-amber-600">+6.2%</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Crop Health Score</p><p class="text-xl font-extrabold text-green-700">82 / 100</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Waktu Temuan → Tindakan</p><p class="text-xl font-extrabold">4.3 jam</p></div>
-        </div>
+        <!-- Perbaikan audit Okt 2026: 6 KPI tile di tab ini dulu 100% statis
+             (Germination Rate, Treatment Effectiveness, Yield Achievement, dst)
+             — tidak ada rumus atau data asli di baliknya sama sekali. Ditampilkan
+             jujur belum tersedia; beberapa KPI (mis. Germination Rate, Yield
+             Achievement) butuh data panen/populasi yang belum dicatat sistem ini. -->
+        <div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Analytics belum tersedia — KPI seperti Germination Rate, Treatment Effectiveness, dan Yield Achievement butuh data panen/populasi/hasil treatment yang belum lengkap tercatat di sistem ini. Akan dibangun setelah data pendukungnya tersedia.</p></div>
       </div>
 
     </div>
@@ -939,19 +934,14 @@
         <h1 class="text-lg font-extrabold text-gray-900 mb-1">Stock Dashboard — Gudang Utama</h1>
         <p class="text-[10.5px] text-gray-400 mb-4">Master barang tersinkron — <span id="item-count-label"></span> item terdaftar · terakhir diperbarui otomatis saat ada perubahan</p>
         <div class="grid grid-cols-4 gap-3 mb-5">
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Nilai Stok</p><p class="text-xl font-extrabold">Rp 412jt</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Item di Bawah Minimum</p><p class="text-xl font-extrabold text-red-600">4</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Mendekati Kedaluwarsa</p><p class="text-xl font-extrabold text-amber-600">6</p></div>
-          <div class="stat-tile"><p class="text-[11px] text-gray-500">Reservasi Aktif</p><p class="text-xl font-extrabold">11</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Nilai Stok</p><p class="text-xl font-extrabold" id="h-stat-value">Rp 0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Item di Bawah Minimum</p><p class="text-xl font-extrabold text-red-600" id="h-stat-belowmin">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Mendekati Kedaluwarsa (30 hari)</p><p class="text-xl font-extrabold text-amber-600" id="h-stat-expiry">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Transaksi 30 Hari Terakhir</p><p class="text-xl font-extrabold" id="h-stat-trx">0</p></div>
         </div>
         <p class="font-bold text-sm text-gray-800 mb-2">Item di bawah stok minimum</p>
-        <table class="data-table"><thead><tr><th>Item</th><th>Stok</th><th>Minimum</th><th>Reorder Point</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>Mankozeb 80WP</td><td>8 kg</td><td>20 kg</td><td>25 kg</td><td><span class="badge b-red">Kritis</span></td></tr>
-          <tr><td>NPK 16-16-16</td><td>140 kg</td><td>200 kg</td><td>250 kg</td><td><span class="badge b-amber">Rendah</span></td></tr>
-          <tr><td>Emamektin Benzoat 5WG</td><td>2.1 kg</td><td>5 kg</td><td>6 kg</td><td><span class="badge b-red">Kritis</span></td></tr>
-          <tr><td>Mulsa Plastik Hitam Perak</td><td>320 m</td><td>500 m</td><td>600 m</td><td><span class="badge b-amber">Rendah</span></td></tr>
-        </tbody></table>
+        <table class="data-table"><thead><tr><th>Item</th><th>Stok</th><th>Minimum</th><th>Status</th></tr></thead>
+        <tbody id="h-belowmin-body"></tbody></table>
       </div>
 
       <div class="screen" data-h="master">
@@ -975,11 +965,16 @@
             <div><label class="field-label">Stok awal</label><input type="number" id="item-stock" value="0"></div>
             <div><label class="field-label">Stok minimum</label><input type="number" id="item-min" value="0"></div>
           </div>
-          <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
             <div><label class="field-label">Harga per satuan (Rp)</label><input type="number" id="item-price" placeholder="mis. 45000"></div>
             <div><label class="field-label">Gudang</label>
               <select id="item-warehouse"><option>Gudang Utama</option><option>Gudang Kebun Cianjur</option></select>
             </div>
+          </div>
+          <div class="mb-4">
+            <label class="field-label">Kaitkan ke katalog produk (opsional)</label>
+            <select id="item-product-link"><option value="">— Tidak dikaitkan —</option></select>
+            <p class="text-[10.5px] text-gray-400 mt-1">Ditambahkan Okt 2026: kalau dikaitkan, sistem otomatis menolak penerimaan/pemakaian barang ini selama produk di katalog berstatus bukan Approved (mis. Suspended) — walau nama di gudang berbeda sedikit dari nama katalog.</p>
           </div>
           <div class="flex gap-2">
             <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveItem()">Simpan Barang</button>
@@ -996,13 +991,14 @@
         <div class="grid grid-cols-3 gap-3 mb-3">
           <div><label class="field-label">Barang</label><select id="rcv-item"><option value="">— Pilih barang —</option></select></div>
           <div><label class="field-label">Quantity diterima</label><input type="number" id="rcv-qty" min="0" step="any"></div>
-          <div><label class="field-label">No. PO (opsional)</label><input type="text" id="rcv-po" placeholder="mis. PO-2026-0114"></div>
+          <div><label class="field-label">Kaitkan ke PO Purchasing (opsional)</label><select id="rcv-po-select"><option value="">— Tanpa PO —</option></select></div>
         </div>
         <div class="grid grid-cols-3 gap-3 mb-4">
           <div><label class="field-label">No. Batch</label><input type="text" id="rcv-batch" placeholder="opsional"></div>
           <div><label class="field-label">Tanggal kedaluwarsa</label><input type="date" id="rcv-expiry"></div>
           <div><label class="field-label">Kondisi</label><select id="rcv-condition"><option>Baik</option><option>Rusak sebagian</option></select></div>
         </div>
+        <p class="text-[10.5px] text-gray-400 mb-3">Ditambahkan Okt 2026: jika dikaitkan ke PO, sistem otomatis memvalidasi qty tidak melebihi yang dipesan dan memperbarui status PO di Purchasing (diterima/sebagian).</p>
         <button class="py-2.5 px-5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveStockReceive()">Simpan Penerimaan</button>
 
         <p class="font-bold text-[13px] text-gray-800 mt-6 mb-2">Riwayat penerimaan terbaru</p>
@@ -1015,6 +1011,9 @@
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div><label class="field-label">Work Order / Treatment (opsional)</label><select id="iss-wo"><option value="">— Tanpa referensi work order —</option></select></div>
           <div><label class="field-label">Barang</label><select id="iss-item" onchange="onIssItemChange()"><option value="">— Pilih barang —</option></select></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div><label class="field-label">Work Order Maintenance (opsional)</label><select id="iss-mwo"><option value="">— Tanpa referensi maintenance —</option></select></div>
         </div>
         <div class="grid grid-cols-3 gap-3 mb-3">
           <div><label class="field-label">Stok tersedia</label><input type="text" id="iss-stock" readonly></div>
@@ -1089,10 +1088,18 @@
       <button data-navadm="produk" onclick="admShow('produk')"><span class="sidebar-icon"></span>Produk &amp; Inventaris</button>
       <button data-navadm="akun" onclick="admShow('akun')"><span class="sidebar-icon"></span>Akun Pekerja</button>
       <button data-navadm="laporan" onclick="admShow('laporan')"><span class="sidebar-icon"></span>Laporan</button>
+      <button data-navadm="blokkom" onclick="admShow('blokkom')"><span class="sidebar-icon"></span>Blok &amp; Komoditas</button>
     </div>
     <div class="main-area">
 
       <div class="screen active" data-adm="lokasi">
+        <div class="flex justify-between items-center mb-4 p-3 rounded-lg" style="background:#fffbeb;border:1px solid #fde68a;">
+          <div>
+            <div class="text-[12.5px] font-bold text-gray-900">Cadangan Data (Backup)</div>
+            <div class="text-[10.5px] text-gray-500">Data aplikasi masih tersimpan sebagai file di server. Unduh &amp; simpan salinannya secara berkala sebagai jaring pengaman.</div>
+          </div>
+          <a href="/api/admin/backup" class="btn btn-secondary btn-sm" style="text-decoration:none;white-space:nowrap;">⬇️ Unduh Backup</a>
+        </div>
         <div class="flex justify-between items-center mb-3">
           <h1 class="text-lg font-extrabold text-gray-900">Lokasi Kebun</h1>
           <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="openAdminLocationForm()">+ Tambah Lokasi</button>
@@ -1151,6 +1158,231 @@
         <tbody id="adm-masalah-body"></tbody></table>
       </div>
 
+      <div class="screen" data-adm="blokkom">
+        <p class="text-[10.5px] text-gray-400 mb-3">Ditambahkan Okt 2026 — data referensi Blok (sub-lokasi lahan) dan Komoditas (jenis tanaman) dipakai Purchasing &amp; modul lain untuk perencanaan. Tidak mengubah Lokasi/Siklus Tanam yang sudah ada.</p>
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Data Blok</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="openAdminBlockForm()">+ Tambah Blok</button>
+        </div>
+        <table class="data-table mb-6"><thead><tr><th>Kode</th><th>Nama Blok</th><th>Lokasi</th><th>Catatan</th><th></th></tr></thead>
+        <tbody id="adm-block-body"></tbody></table>
+
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Data Komoditas</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="openAdminCommodityForm()">+ Tambah Komoditas</button>
+        </div>
+        <table class="data-table"><thead><tr><th>Nama Komoditas</th><th>Kategori</th><th>Catatan</th><th></th></tr></thead>
+        <tbody id="adm-commodity-body"></tbody></table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ROLE: PURCHASING (Okt 2026) -->
+<!-- ============================================================ -->
+<div class="role-panel" id="role-purchasing">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="brand">Purchasing</div>
+      <button class="active" data-navp="dashboard" onclick="pShow('dashboard')"><span class="sidebar-icon"></span>Dashboard</button>
+      <button data-navp="supplier" onclick="pShow('supplier')"><span class="sidebar-icon"></span>Supplier</button>
+      <button data-navp="po" onclick="pShow('po')"><span class="sidebar-icon"></span>Purchase Order</button>
+      <button data-navp="invoice" onclick="pShow('invoice')"><span class="sidebar-icon"></span>Invoice</button>
+    </div>
+    <div class="main-area">
+
+      <div class="screen active" data-p="dashboard">
+        <h1 class="text-lg font-extrabold text-gray-900 mb-1">Dashboard Purchasing</h1>
+        <p class="text-[10.5px] text-gray-400 mb-4">Modul baru Okt 2026 — PO hanya mengubah stok lewat penerimaan barang yang diverifikasi Gudang, bukan saat PO dibuat/dikirim.</p>
+        <div class="grid grid-cols-4 gap-3 mb-5">
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Supplier Terdaftar</p><p class="text-xl font-extrabold" id="p-stat-suppliers">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">PO Belum Diterima Penuh</p><p class="text-xl font-extrabold text-amber-600" id="p-stat-openpo">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Invoice Menunggu Verifikasi</p><p class="text-xl font-extrabold text-amber-600" id="p-stat-pendinginv">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Invoice Discrepancy</p><p class="text-xl font-extrabold text-red-600" id="p-stat-discrepancy">0</p></div>
+        </div>
+        <p class="font-bold text-sm text-gray-800 mb-2">PO terbaru</p>
+        <table class="data-table"><thead><tr><th>No. PO</th><th>Supplier</th><th>Status</th><th>Tanggal</th></tr></thead>
+        <tbody id="p-dash-po-body"></tbody></table>
+      </div>
+
+      <div class="screen" data-p="supplier">
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Supplier</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toggleSupplierForm()">+ Tambah Supplier</button>
+        </div>
+        <div id="supplier-form" class="hidden card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Nama supplier</label><input type="text" id="sup-name" placeholder="mis. Toko Tani Makmur"></div>
+            <div><label class="field-label">Kontak (nama/HP)</label><input type="text" id="sup-contact" placeholder="opsional"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Alamat</label><input type="text" id="sup-address" placeholder="opsional"></div>
+            <div><label class="field-label">Catatan</label><input type="text" id="sup-notes" placeholder="opsional"></div>
+          </div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveSupplier()">Simpan Supplier</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toggleSupplierForm()">Batal</button>
+          </div>
+        </div>
+        <table class="data-table"><thead><tr><th>Nama</th><th>Kontak</th><th>Alamat</th><th>Catatan</th><th></th></tr></thead>
+        <tbody id="supplier-body"></tbody></table>
+      </div>
+
+      <div class="screen" data-p="po">
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Purchase Order</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="togglePoForm()">+ Buat PO</button>
+        </div>
+        <div id="po-form" class="hidden card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Supplier</label><select id="po-supplier"><option value="">— Pilih supplier —</option></select></div>
+            <div><label class="field-label">No. PO</label><input type="text" id="po-no" placeholder="mis. PO-2026-0114"></div>
+          </div>
+          <div class="grid grid-cols-4 gap-3 mb-2">
+            <div class="col-span-2"><label class="field-label">Barang</label><select id="po-item"><option value="">— Pilih barang —</option></select></div>
+            <div><label class="field-label">Qty dipesan</label><input type="number" id="po-item-qty" min="0" step="any"></div>
+            <div><label class="field-label">Harga/satuan (Rp)</label><input type="number" id="po-item-price" min="0"></div>
+          </div>
+          <button class="mb-3 px-3 py-1.5 rounded-lg font-bold text-[12px] border border-gray-300 text-gray-600" onclick="addPoLine()">+ Tambah baris barang</button>
+          <table class="data-table mb-3"><thead><tr><th>Barang</th><th>Qty</th><th>Harga</th><th></th></tr></thead>
+          <tbody id="po-lines-body"><tr><td colspan="4" class="text-center text-gray-400 py-3">Belum ada baris barang.</td></tr></tbody></table>
+          <div class="mb-3"><label class="field-label">Catatan (opsional)</label><input type="text" id="po-notes"></div>
+          <div id="po-error" class="hidden card p-2.5 mb-3 text-[12px] font-semibold" style="background:var(--red-100); color:var(--red-700); border-color:#fecaca;"></div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="savePo()">Kirim PO ke Supplier</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="togglePoForm()">Batal</button>
+          </div>
+        </div>
+        <table class="data-table"><thead><tr><th>No. PO</th><th>Supplier</th><th>Jumlah Baris</th><th>Status</th><th>Tanggal</th></tr></thead>
+        <tbody id="po-body"></tbody></table>
+      </div>
+
+      <div class="screen" data-p="invoice">
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Invoice</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toggleInvoiceForm()">+ Catat Invoice</button>
+        </div>
+        <div id="invoice-form" class="hidden card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">PO terkait</label><select id="inv-po"><option value="">— Pilih PO —</option></select></div>
+            <div><label class="field-label">No. Invoice</label><input type="text" id="inv-no" placeholder="mis. INV-0099"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Jumlah (Rp)</label><input type="number" id="inv-amount" min="0"></div>
+            <div><label class="field-label">Catatan (opsional)</label><input type="text" id="inv-notes"></div>
+          </div>
+          <div id="inv-error" class="hidden card p-2.5 mb-3 text-[12px] font-semibold" style="background:var(--red-100); color:var(--red-700); border-color:#fecaca;"></div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveInvoice()">Simpan Invoice</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toggleInvoiceForm()">Batal</button>
+          </div>
+        </div>
+        <p class="text-[10.5px] text-gray-400 mb-3">Status "Matched/Discrepancy" dihitung otomatis oleh sistem berdasarkan barang yang sudah diterima Gudang — tidak bisa diubah manual.</p>
+        <table class="data-table"><thead><tr><th>No. Invoice</th><th>PO</th><th>Jumlah</th><th>Match</th><th>Pembayaran</th><th></th></tr></thead>
+        <tbody id="invoice-body"></tbody></table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ROLE: MAINTENANCE (Okt 2026) -->
+<!-- ============================================================ -->
+<div class="role-panel" id="role-maintenance">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="brand">Maintenance</div>
+      <button class="active" data-navm="dashboard" onclick="mShow('dashboard')"><span class="sidebar-icon"></span>Dashboard</button>
+      <button data-navm="asset" onclick="mShow('asset')"><span class="sidebar-icon"></span>Aset</button>
+      <button data-navm="damage" onclick="mShow('damage')"><span class="sidebar-icon"></span>Laporan Kerusakan</button>
+      <button data-navm="wo" onclick="mShow('wo')"><span class="sidebar-icon"></span>Work Order</button>
+    </div>
+    <div class="main-area">
+
+      <div class="screen active" data-m="dashboard">
+        <h1 class="text-lg font-extrabold text-gray-900 mb-1">Dashboard Maintenance</h1>
+        <p class="text-[10.5px] text-gray-400 mb-4">Modul baru Okt 2026 — pemakaian material work order maintenance otomatis tercatat di riwayat stok Gudang.</p>
+        <div class="grid grid-cols-4 gap-3 mb-5">
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Aset Terdaftar</p><p class="text-xl font-extrabold" id="m-stat-assets">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Laporan Menunggu</p><p class="text-xl font-extrabold text-amber-600" id="m-stat-pendingdamage">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Work Order Aktif</p><p class="text-xl font-extrabold text-blue-600" id="m-stat-activewo">0</p></div>
+          <div class="stat-tile"><p class="text-[11px] text-gray-500">Selesai Bulan Ini</p><p class="text-xl font-extrabold text-green-600" id="m-stat-donewo">0</p></div>
+        </div>
+        <p class="font-bold text-sm text-gray-800 mb-2">Laporan kerusakan terbaru</p>
+        <table class="data-table"><thead><tr><th>Aset</th><th>Deskripsi</th><th>Severity</th><th>Status</th></tr></thead>
+        <tbody id="m-dash-damage-body"></tbody></table>
+      </div>
+
+      <div class="screen" data-m="asset">
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Aset</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toggleAssetForm()">+ Tambah Aset</button>
+        </div>
+        <div id="asset-form" class="hidden card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Nama aset</label><input type="text" id="asset-name" placeholder="mis. Pompa Air Greenhouse 1"></div>
+            <div><label class="field-label">Kode aset (opsional)</label><input type="text" id="asset-code" placeholder="mis. AST-001"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Lokasi</label><input type="text" id="asset-location" placeholder="opsional"></div>
+            <div><label class="field-label">Kategori</label><input type="text" id="asset-category" placeholder="mis. Irigasi, Kendaraan, Bangunan"></div>
+          </div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveAsset()">Simpan Aset</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toggleAssetForm()">Batal</button>
+          </div>
+        </div>
+        <table class="data-table"><thead><tr><th>Nama</th><th>Kode</th><th>Lokasi</th><th>Kategori</th><th></th></tr></thead>
+        <tbody id="asset-body"></tbody></table>
+      </div>
+
+      <div class="screen" data-m="damage">
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Laporan Kerusakan</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toggleDamageForm()">+ Lapor Kerusakan</button>
+        </div>
+        <div id="damage-form" class="hidden card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Aset (opsional)</label><select id="dmg-asset"><option value="">— Tidak terkait aset tertentu —</option></select></div>
+            <div><label class="field-label">Severity</label><select id="dmg-severity"><option value="rendah">Rendah</option><option value="sedang" selected>Sedang</option><option value="tinggi">Tinggi</option></select></div>
+          </div>
+          <div class="mb-3"><label class="field-label">Deskripsi kerusakan</label><textarea id="dmg-desc" rows="2"></textarea></div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveDamageReport()">Kirim Laporan</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toggleDamageForm()">Batal</button>
+          </div>
+        </div>
+        <table class="data-table"><thead><tr><th>Aset</th><th>Deskripsi</th><th>Severity</th><th>Status</th><th></th></tr></thead>
+        <tbody id="damage-body"></tbody></table>
+      </div>
+
+      <div class="screen" data-m="wo">
+        <div class="flex justify-between items-center mb-3">
+          <h1 class="text-lg font-extrabold text-gray-900">Work Order Maintenance</h1>
+          <button class="px-3 py-1.5 rounded-lg font-bold text-[12.5px] text-white" style="background:var(--green-600);" onclick="toggleMwoForm()">+ Buat Work Order</button>
+        </div>
+        <div id="mwo-form" class="hidden card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Aset</label><select id="mwo-asset"><option value="">— Pilih aset —</option></select></div>
+            <div><label class="field-label">Dari laporan kerusakan (opsional)</label><select id="mwo-damage"><option value="">— Tidak terkait —</option></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div><label class="field-label">Ditugaskan ke</label><input type="text" id="mwo-assignedto" placeholder="mis. Teknisi A"></div>
+            <div><label class="field-label">Estimasi biaya (Rp, opsional)</label><input type="number" id="mwo-cost" min="0"></div>
+          </div>
+          <div class="mb-3"><label class="field-label">Catatan</label><textarea id="mwo-notes" rows="2"></textarea></div>
+          <div class="flex gap-2">
+            <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveMwo()">Buat Work Order</button>
+            <button class="px-5 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="toggleMwoForm()">Batal</button>
+          </div>
+        </div>
+        <table class="data-table"><thead><tr><th>Aset</th><th>Ditugaskan</th><th>Material Dipakai</th><th>Status</th><th></th></tr></thead>
+        <tbody id="mwo-body"></tbody></table>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1167,6 +1399,8 @@ let workOrders = [], syncQueue = [], incomingReports = [],
     sopList = [], problemDict = [], productDb = [], activeIngredients = [], compatGroups = [],
     compatMatrix = {}, itemMaster = [], treatmentList = [], dailyPlans = [], monthlyPlans = [],
     dailyReports = [], monthlyReports = [], greenReports = [], locations = [], harvestReports = [],
+    blocks = [], commodities = [], suppliers = [], purchaseOrders = [], purchaseInvoices = [],
+    assets = [], damageReports = [], maintenanceWorkOrders = [],
     activeLocationFilter = 'all';
 let currentUser = null;
 const WO_STATUS_LABEL = {assigned:'Ditugaskan', in_progress:'Dikerjakan', paused:'Dijeda', revision:'Perlu Revisi', submitted:'Menunggu Review', approved:'Disetujui', cancelled:'Dibatalkan'};
@@ -1200,6 +1434,66 @@ async function apiDelete(p){
   return data;
 }
 
+/* ===================== SINKRONISASI OFFLINE (Pekerja Lapangan) ===================== */
+/* Perbaikan audit Okt 2026: sebelumnya tombol "Sinkronkan Sekarang" cuma
+ * mengubah tampilan (syncQueue seed data diset 'Tersinkron') tanpa pernah
+ * mengirim apa pun ke server — data offline sungguhan BISA HILANG tanpa
+ * pekerja menyadarinya. Sekarang: saat sebuah aksi penting pekerja (mulai/
+ * jeda/kirim tugas, lapor masalah) gagal karena TIDAK ADA SINYAL (bukan
+ * ditolak server), perubahan disimpan dulu di perangkat (localStorage) dan
+ * benar-benar dikirim ulang ke server saat sinyal tersedia lagi — bukan
+ * cuma dianggap "selesai" begitu saja.
+ */
+const OFFLINE_QUEUE_KEY = 'upterindo_offline_queue_v1';
+function isNetworkError(e){
+  // fetch() yang gagal total (tidak ada koneksi) melempar TypeError, beda
+  // dengan respons server yang datang tapi isinya error (ditolak validasi).
+  return e instanceof TypeError || /network|failed to fetch|load failed/i.test((e && e.message) || '');
+}
+function loadOfflineQueueFromStorage(){
+  try{ return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function persistOfflineQueue(){
+  try{ localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue)); }
+  catch(e){ /* penyimpanan perangkat penuh/diblokir — antrean tetap ada selama sesi ini */ }
+}
+let offlineQueue = loadOfflineQueueFromStorage();
+function queueOfflineAction(method, path, body, label){
+  offlineQueue.push({
+    qid: 'Q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    method, path, body, label: label || path,
+    state: 'Tersimpan di perangkat',
+    queuedAt: new Date().toISOString(),
+  });
+  persistOfflineQueue();
+  if(typeof renderWorkerLists === 'function') renderWorkerLists();
+}
+async function syncNow(){
+  if(!offlineQueue.length){ toast('Tidak ada data yang perlu disinkronkan.'); return; }
+  offlineQueue.forEach(item => { item.state = 'Menyinkronkan…'; });
+  if(typeof renderWorkerLists === 'function') renderWorkerLists();
+  let success = 0, stillPending = 0;
+  for(const item of [...offlineQueue]){
+    try{
+      if(item.method === 'POST') await apiPost(item.path, item.body);
+      else if(item.method === 'PUT') await apiPut(item.path, item.body);
+      offlineQueue = offlineQueue.filter(q => q.qid !== item.qid);
+      success++;
+    }catch(e){
+      item.state = isNetworkError(e) ? 'Menunggu sinyal' : ('Ditolak server — ' + (e.message || 'periksa data'));
+      stillPending++;
+    }
+  }
+  persistOfflineQueue();
+  if(typeof renderWorkerLists === 'function') renderWorkerLists();
+  try{ await loadAllData(); }catch(e){ /* refresh terbaik-upaya, antrean lokal tetap jadi sumber kebenaran kalau ini gagal */ }
+  if(success && !stillPending) toast(success + ' data berhasil disinkronkan ke server.');
+  else if(success && stillPending) toast(success + ' berhasil disinkronkan, ' + stillPending + ' masih tertunda.');
+  else toast('Belum bisa disinkronkan — periksa koneksi internet, data tetap aman tersimpan di perangkat.');
+}
+window.addEventListener('online', () => { if(offlineQueue.length) syncNow(); });
+
 async function loadAllData(){
   const [
     _workOrders, _syncQueue, _incomingReports, _attendance,
@@ -1207,6 +1501,8 @@ async function loadAllData(){
     _productDb, _activeIngredients, _compatGroups, _compatMatrix, _itemMaster, _treatmentList,
     _dailyPlans, _monthlyPlans, _dailyReports, _monthlyReports, _greenReports,
     _locations, _harvestReports, _prList,
+    _blocks, _commodities, _suppliers, _purchaseOrders, _purchaseInvoices,
+    _assets, _damageReports, _maintenanceWorkOrders,
   ] = await Promise.all([
     apiGet('/workorders'), apiGet('/syncQueue'),
     apiGet('/incomingReports'), apiGet('/attendance'),
@@ -1215,6 +1511,8 @@ async function loadAllData(){
     apiGet('/itemMaster'), apiGet('/treatmentList'), apiGet('/dailyPlans'), apiGet('/monthlyPlans'),
     apiGet('/dailyReports'), apiGet('/monthlyReports'), apiGet('/greenReports'),
     apiGet('/locations'), apiGet('/harvestReports'), apiGet('/purchaseRequests'),
+    apiGet('/blocks'), apiGet('/commodities'), apiGet('/suppliers'), apiGet('/purchaseOrders'), apiGet('/purchaseInvoices'),
+    apiGet('/assets'), apiGet('/damageReports'), apiGet('/maintenanceWorkOrders'),
   ]);
   workOrders = _workOrders; syncQueue = _syncQueue;
   incomingReports = _incomingReports; attendance = _attendance;
@@ -1225,6 +1523,9 @@ async function loadAllData(){
   monthlyPlans = _monthlyPlans; dailyReports = _dailyReports; monthlyReports = _monthlyReports;
   greenReports = _greenReports; locations = _locations; harvestReports = _harvestReports;
   prList = _prList;
+  blocks = _blocks; commodities = _commodities; suppliers = _suppliers;
+  purchaseOrders = _purchaseOrders; purchaseInvoices = _purchaseInvoices;
+  assets = _assets; damageReports = _damageReports; maintenanceWorkOrders = _maintenanceWorkOrders;
 }
 
 function compatLookup(a,b){
@@ -1291,6 +1592,20 @@ async function afterAuthSuccess(user){
     loadAdminUsers();
     loadAdminRegistrations();
     renderAdminReports();
+    renderAdminBlocks();
+    renderAdminCommodities();
+  }
+  if(currentUser.role === 'purchasing' || currentUser.role === 'admin'){
+    renderPurchasingDashboard();
+    renderSuppliers();
+    renderPurchaseOrders();
+    renderPurchaseInvoices();
+  }
+  if(currentUser.role === 'maintenance' || currentUser.role === 'admin'){
+    renderMaintenanceDashboard();
+    renderAssets();
+    renderDamageReports();
+    renderMaintenanceWorkOrders();
   }
 
   switchRole(currentUser.role);
@@ -1332,6 +1647,15 @@ function switchRole(role){
 /* ===================== MASTER BARANG (Gudang) ===================== */
 function toggleItemForm(){
   document.getElementById('item-form').classList.toggle('hidden');
+  const sel = document.getElementById('item-product-link');
+  if(sel && sel.options.length <= 1){
+    (productDb||[]).forEach(p=>{
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name + (p.status && p.status!=='Approved' ? ' — '+p.status : '');
+      sel.appendChild(opt);
+    });
+  }
 }
 function renderItemMaster(){
   document.getElementById('item-master-body').innerHTML = itemMaster.map(it=>`
@@ -1344,6 +1668,28 @@ function renderItemMaster(){
     </tr>`).join('');
   const countLabel = document.getElementById('item-count-label');
   if(countLabel) countLabel.innerText = itemMaster.length;
+  renderWarehouseDashboard();
+}
+function renderWarehouseDashboard(){
+  const valEl = document.getElementById('h-stat-value');
+  if(!valEl) return; // belum login sebagai warehouse, tidak perlu render
+  const totalValue = itemMaster.reduce((sum,it)=>sum + (Number(it.stock)||0)*(Number(it.price)||0), 0);
+  valEl.textContent = totalValue >= 1000000 ? `Rp ${Math.round(totalValue/1000000)}jt` : `Rp ${totalValue.toLocaleString('id-ID')}`;
+
+  const belowMin = itemMaster.filter(it=>Number(it.stock) < Number(it.min));
+  document.getElementById('h-stat-belowmin').textContent = belowMin.length;
+  document.getElementById('h-belowmin-body').innerHTML = belowMin.length ? belowMin.map(it=>`
+    <tr><td>${it.name}</td><td>${it.stock} ${it.unit||''}</td><td>${it.min} ${it.unit||''}</td>
+    <td><span class="badge ${it.stock <= it.min*0.5 ? 'b-red' : 'b-amber'}">${it.stock <= it.min*0.5 ? 'Kritis' : 'Rendah'}</span></td></tr>`).join('')
+    : '<tr><td colspan="4" class="text-center text-gray-400">Semua item di atas stok minimum.</td></tr>';
+
+  const in30days = Date.now() + 30*24*60*60*1000;
+  const nearExpiry = (stockTransactions||[]).filter(t=>t.type==='in' && t.expiry && new Date(t.expiry).getTime() <= in30days && new Date(t.expiry).getTime() >= Date.now());
+  document.getElementById('h-stat-expiry').textContent = nearExpiry.length;
+
+  const since30 = Date.now() - 30*24*60*60*1000;
+  const recentTrx = (stockTransactions||[]).filter(t=>t.createdAt && new Date(t.createdAt).getTime() >= since30);
+  document.getElementById('h-stat-trx').textContent = recentTrx.length;
 }
 async function saveItem(){
   const name = document.getElementById('item-name').value.trim();
@@ -1356,6 +1702,7 @@ async function saveItem(){
     min: Number(document.getElementById('item-min').value) || 0,
     price: Number(document.getElementById('item-price').value) || 0,
     wh: document.getElementById('item-warehouse').value,
+    productId: document.getElementById('item-product-link').value || null,
   };
   try{
     const saved = await apiPost('/itemMaster', payload);
@@ -1374,6 +1721,15 @@ async function saveItem(){
 /* ===================== TREATMENT BARU (Agronomis) ===================== */
 function toggleTreatmentForm(){
   document.getElementById('treatment-form').classList.toggle('hidden');
+  /* Perbaikan audit Okt 2026: dropdown ini dulu berisi pilihan "Blok A1/A3/
+   * B2/C1" yang hardcoded dan tidak cocok dengan crop cycle asli manapun —
+   * kalau dipakai, treatment tersimpan dengan lokasi fiktif. Sekarang diisi
+   * dari data cropCycles asli, sama seperti dropdown di form utama atas. */
+  const plotSel = document.getElementById('tr-plot');
+  if(plotSel && !plotSel.dataset.filled){
+    plotSel.innerHTML = '<option value="">— Pilih crop cycle —</option>' + cropCycles.map(c=>`<option value="${c.id}">${c.id} — ${c.crop} (${c.plot}, ${c.location||'-'})</option>`).join('');
+    plotSel.dataset.filled = '1';
+  }
 }
 function renderTreatmentList(){
   const statusMap = {Terjadwal:'b-blue', Selesai:'b-green', 'Menunggu Approval':'b-amber'};
@@ -1382,14 +1738,21 @@ function renderTreatmentList(){
     <td><span class="badge ${statusMap[t.status]||'b-gray'}">${t.status}</span></td></tr>`).join('');
 }
 async function saveTreatment(){
-  const plot = document.getElementById('tr-plot').value;
+  /* Perbaikan audit Okt 2026: dulu id dibuat sendiri di klien
+   * ('TRT-0'+angka urut) — dua pengguna submit nyaris bersamaan bisa
+   * menghasilkan id yang sama dan saling menimpa. Sekarang id dibuat
+   * server (newId()) seperti koleksi lain — field id dihapus dari payload. */
+  const cc = cropCycles.find(c=>c.id===document.getElementById('tr-plot').value);
   const type = document.getElementById('tr-type').value;
-  const product = document.getElementById('tr-product').value || '—';
+  const product = document.getElementById('tr-product').value.trim();
   const date = document.getElementById('tr-date').value;
-  const nextNum = 143 + treatmentList.length;
+  if(!cc){ toast('Pilih plot / crop cycle terlebih dahulu'); return; }
+  if(!product){ toast('Produk / bahan wajib diisi'); return; }
+  const flagged = productDb.find(p=>p.status && p.status!=='Approved' && product.includes(p.name));
+  if(flagged){ toast('Tidak bisa disimpan — produk "'+flagged.name+'" berstatus "'+flagged.status+'", bukan Approved.'); return; }
   const payload = {
-    id: 'TRT-0'+nextNum,
-    plot: plot.split(' — ')[0] + ' — ' + plot.split(' — ')[1].split(' (')[0],
+    cropCycleId: cc.id,
+    plot: cc.id + ' — ' + cc.crop,
     type, product,
     date: date ? new Date(date).toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'numeric'}) : '-',
     status: 'Menunggu Approval',
@@ -1564,13 +1927,19 @@ function renderLaporanHarian(){
       <td>${r.treatment}</td><td>${r.produktivitas}%</td></tr>`).join('');
 }
 async function buatLaporanHarian(){
-  const totalAktivitas = incomingReports.length + treatmentList.filter(t=>t.status==='Selesai').length;
-  const hadirCount = attendance.filter(a=>a.status==='Hadir').length;
-  const izinCount = attendance.length - hadirCount;
-  const isuBaru = openIssues.filter(i=>i.status!=='Selesai').length;
+  const todayIso = new Date().toISOString().slice(0,10);
+  const todayWos = workOrders.filter(w=>w.scheduledDate===todayIso);
+  const totalAktivitas = todayWos.length + incomingReports.filter(r=>r.createdAt && r.createdAt.slice(0,10)===todayIso).length;
+  const hadirCount = attendance.filter(a=>a.status==='Hadir' && (!a.date || a.date===todayIso)).length;
+  const izinCount = attendance.filter(a=>(!a.date || a.date===todayIso)).length - hadirCount;
+  const isuBaru = incomingReports.filter(r=>r.status==='Menunggu').length;
+  const isuSelesai = incomingReports.filter(r=>r.status==='Disetujui').length;
+  const activeWos = workOrders.filter(w=>w.status!=='cancelled');
+  const produktivitas = activeWos.length ? Math.round(activeWos.filter(w=>w.status==='approved').length/activeWos.length*100) : 0;
   const payload = {
-    tanggal:'12 Agu 2026 (hari ini)', totalAktivitas, hadir:hadirCount, izin:izinCount,
-    isuBaru, isuSelesai:0, treatment:treatmentList.filter(t=>t.status==='Terjadwal').length, produktivitas:82,
+    tanggal: new Date().toLocaleDateString('id-ID',{weekday:'long', day:'numeric', month:'long', year:'numeric'}),
+    totalAktivitas, hadir:hadirCount, izin:izinCount,
+    isuBaru, isuSelesai, treatment:treatmentList.filter(t=>t.status==='Terjadwal').length, produktivitas,
     catatan:'Laporan dibuat otomatis dari data operasional hari berjalan.',
   };
   try{
@@ -1626,9 +1995,21 @@ function renderLaporanBulanan(){
       <td>${r.insiden}</td><td>${r.treatmentApproved}</td><td>${r.panenTon} ton</td></tr>`).join('');
 }
 async function buatLaporanBulanan(){
+  const now = new Date();
+  const monthStart = now.toISOString().slice(0,7); // YYYY-MM
+  const monthWos = workOrders.filter(w=>(w.scheduledDate||'').startsWith(monthStart));
+  const activeMonthWos = monthWos.filter(w=>w.status!=='cancelled');
+  const produktivitasRata = activeMonthWos.length ? Math.round(activeMonthWos.filter(w=>w.status==='approved').length/activeMonthWos.length*100) : 0;
+  const panenTon = harvestReports.filter(h=>(h.tanggal||'').startsWith(monthStart) && (h.satuan||'').toLowerCase().includes('kg'))
+    .reduce((sum,h)=>sum + (Number(h.jumlah)||0), 0) / 1000;
   const payload = {
-    bulan:'Agustus 2026 (berjalan)', totalAktivitas:132, produktivitasRata:80, insiden:openIssues.length,
-    insidenSelesai:0, treatmentApproved:approvalQueue.length, panenTon:0,
+    bulan: now.toLocaleDateString('id-ID',{month:'long', year:'numeric'}) + ' (berjalan)',
+    totalAktivitas: monthWos.length,
+    produktivitasRata,
+    insiden: incomingReports.filter(r=>r.status==='Menunggu').length,
+    insidenSelesai: incomingReports.filter(r=>r.status==='Disetujui').length,
+    treatmentApproved: workOrders.filter(w=>w.source==='treatment-approval').length,
+    panenTon: Math.round(panenTon*10)/10,
     catatan:'Laporan dibuat otomatis dari data operasional bulan berjalan (belum lengkap 1 bulan penuh).',
   };
   try{
@@ -1915,18 +2296,6 @@ async function saveAssignTask(){
   }
 }
 
-function openPlot(code){
-  const cc = cropCycles.find(c=>c.plot.includes(code)) || {id:'CC-2026-0'+code, crop:'—', variety:'—', plot:'Blok '+code, stage:'—', progress:0, status:'—'};
-  openPanelHTML(panelHeader('Blok '+code, cc.crop+' — '+cc.variety) + `
-    <div class="p-5 text-[13px] space-y-3">
-      <div><p class="field-label">Crop Cycle</p><p class="font-semibold">${cc.id} — <span class="badge b-green">${cc.status}</span></p></div>
-      <div><p class="field-label">Tahap pertumbuhan</p><p class="font-semibold">${cc.stage}</p></div>
-      <div><p class="field-label">Progress</p><div class="progress-bar mt-1"><div style="width:${cc.progress}%"></div></div></div>
-      <div><p class="field-label">Luas efektif</p><p class="font-semibold">0.8 ha</p></div>
-      <div><p class="field-label">Estimasi panen</p><p class="font-semibold">14 hari lagi</p></div>
-    </div>`);
-}
-
 function setLocationFilter(name){
   activeLocationFilter = name;
   renderAgronomist();
@@ -1969,12 +2338,15 @@ function openReport(id){
     ? `<div class="grid grid-cols-3 gap-2">${Object.entries(r.photos).map(([k,v])=>`<div class="upload-box" style="background-image:url(${v});background-size:cover;background-position:center;"></div>`).join('')}</div>`
     : `<p class="text-[11.5px] text-gray-400">Tidak ada foto dilampirkan.</p>`;
   const reportStatusBadge = {Menunggu:'b-amber', Disetujui:'b-green', Revisi:'b-red', Ditolak:'b-gray'};
-  const actionsHtml = r.status==='Menunggu' ? `
+  const isReviewer = currentUser && ['supervisor','agronomist','admin'].includes(currentUser.role);
+  const isOwner = currentUser && r.reporterId === currentUser.id;
+  const actionsHtml = (r.status==='Menunggu' && isReviewer) ? `
       <div class="flex gap-2 pt-2">
         <button class="flex-1 py-2 rounded-lg font-bold text-white text-[12.5px]" style="background:var(--green-600);" onclick="reviewIncomingReport('${r.id}','approve')">Approve</button>
         <button class="flex-1 py-2 rounded-lg font-bold text-[12.5px] border border-gray-300" onclick="reviewIncomingReport('${r.id}','revision')">Minta Revisi</button>
         <button class="px-3 py-2 rounded-lg font-bold text-[12.5px] border border-red-200 text-red-600" onclick="reviewIncomingReport('${r.id}','reject')">Tolak</button>
       </div>` : (r.reviewNote ? `<div><p class="field-label">Catatan reviewer</p><p class="font-semibold">${r.reviewNote}</p></div>` : '');
+  const editHtml = (r.status==='Menunggu' && isOwner) ? `<button class="btn btn-secondary btn-block mt-2" onclick="editMyReport('${r.id}')">✏️ Edit Laporan</button>` : '';
   openPanelHTML(panelHeader(r.act||'Lapor Masalah', (r.worker||'-')+' · '+(r.komoditas||'-')+' · '+(r.time||'')) + `
     <div class="p-5 text-[13px] space-y-3">
       <div><p class="field-label">Status</p><span class="badge ${reportStatusBadge[r.status]||'b-amber'}">${r.status||'Menunggu'}</span></div>
@@ -1986,7 +2358,58 @@ function openReport(id){
       <div><p class="field-label">Dugaan awal pekerja</p><p class="font-semibold">${r.dugaan||'-'}</p></div>
       <div><p class="field-label">Foto</p>${photoHtml}</div>
       ${actionsHtml}
+      ${editHtml}
     </div>`);
+}
+function editMyReport(id){
+  const r = incomingReports.find(x=>x.id===id);
+  if(!r){ toast('Laporan tidak ditemukan'); return; }
+  if(!(currentUser && r.reporterId===currentUser.id && r.status==='Menunggu')){ toast('Laporan ini sudah tidak bisa diedit.'); return; }
+  openPanelHTML(panelHeader('Edit Laporan Masalah', r.komoditas||'-') + `
+    <div class="p-5 text-[13px] space-y-3">
+      <div id="edit-report-error" class="hidden card p-2.5 text-[12px] font-semibold" style="background:var(--red-100); color:var(--red-700); border-color:#fecaca;"></div>
+      <div><label class="field-label">Komoditas</label><input type="text" id="edit-komoditas" value="${r.komoditas||''}"></div>
+      <div><label class="field-label">Umur tanaman</label><input type="text" id="edit-umur" value="${r.umur||''}"></div>
+      <div><label class="field-label">Bagian tanaman terdampak</label><input type="text" id="edit-bagian" value="${r.bagianTerdampak||''}"></div>
+      <div><label class="field-label">Jenis gejala</label><input type="text" id="edit-gejala" value="${r.jenisGejala||''}"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="field-label">Jumlah sampel</label><input type="text" id="edit-sampel" value="${r.jumlahSampel||''}"></div>
+        <div><label class="field-label">Jumlah terdampak</label><input type="text" id="edit-terdampak" value="${r.jumlahTerdampak||''}"></div>
+      </div>
+      <div><label class="field-label">Severity (0-5)</label><input type="number" min="0" max="5" id="edit-severity" value="${r.severity||0}"></div>
+      <div><label class="field-label">Distribusi</label><input type="text" id="edit-distribusi" value="${r.distribusi||''}"></div>
+      <div><label class="field-label">Dugaan awal</label><input type="text" id="edit-dugaan" value="${r.dugaan||''}"></div>
+      <div class="flex gap-2 pt-1">
+        <button class="btn btn-primary" style="flex:1;" onclick="saveMyReportEdit('${r.id}')">Simpan Perubahan</button>
+        <button class="btn btn-secondary" onclick="openReport('${r.id}')">Batal</button>
+      </div>
+    </div>`);
+}
+async function saveMyReportEdit(id){
+  const errEl = document.getElementById('edit-report-error');
+  errEl.classList.add('hidden');
+  const payload = {
+    komoditas: document.getElementById('edit-komoditas').value,
+    umur: document.getElementById('edit-umur').value,
+    bagianTerdampak: document.getElementById('edit-bagian').value,
+    jenisGejala: document.getElementById('edit-gejala').value,
+    jumlahSampel: document.getElementById('edit-sampel').value,
+    jumlahTerdampak: document.getElementById('edit-terdampak').value,
+    severity: document.getElementById('edit-severity').value,
+    distribusi: document.getElementById('edit-distribusi').value,
+    dugaan: document.getElementById('edit-dugaan').value,
+  };
+  try{
+    const updated = await apiPut('/incomingReports/'+id, payload);
+    const idx = incomingReports.findIndex(x=>x.id===id);
+    if(idx>-1) incomingReports[idx] = updated;
+    renderWorkerLists();
+    toast('Laporan berhasil diperbarui');
+    openReport(id);
+  }catch(e){
+    errEl.textContent = e.message || 'Gagal menyimpan perubahan';
+    errEl.classList.remove('hidden');
+  }
 }
 async function reviewIncomingReport(id, action){
   const reviewNote = action!=='approve' ? prompt('Catatan untuk pekerja (opsional):') || '' : undefined;
@@ -2092,6 +2515,31 @@ function renderWorkerLists(){
   const active = myActiveWorkOrders();
   const history = myWorkOrderHistory();
   const emptyCard = (msg) => `<div class="card p-4 text-center"><p class="text-[12px] text-gray-400">${msg}</p></div>`;
+
+  /* Kartu ringkasan Beranda — dihitung dari data asli (workOrders), bukan angka tetap */
+  const doneCount = history.filter(h=>h.status==='approved').length;
+  const summaryEl = document.getElementById('worker-task-summary');
+  if(summaryEl) summaryEl.textContent = active.length ? `${active.length} tugas aktif · ${doneCount} selesai` : (doneCount ? `Tidak ada tugas aktif · ${doneCount} selesai` : 'Belum ada tugas ditugaskan');
+  const locEl = document.getElementById('worker-loc-label');
+  if(locEl){
+    const firstLoc = active[0] ? [active[0].location, active[0].plot].filter(Boolean).join(' · ') : '';
+    locEl.textContent = firstLoc || (currentUser && currentUser.team && currentUser.team!=='-' ? currentUser.team : 'Lokasi belum diatur');
+  }
+  const teamLbl = document.getElementById('worker-team-label');
+  if(teamLbl) teamLbl.textContent = (currentUser && currentUser.team && currentUser.team!=='-') ? currentUser.team : '';
+
+  /* Peringatan hama — hanya tampil jika benar-benar ada laporan masalah severity tinggi yang masih terbuka */
+  const criticalOpen = (incomingReports||[]).filter(r=>Number(r.severity)>=4 && r.status==='Menunggu');
+  const alertBox = document.getElementById('worker-pest-alert');
+  if(alertBox){
+    if(criticalOpen.length){
+      const c = criticalOpen[0];
+      document.getElementById('worker-pest-desc').textContent = `${c.jenisGejala||'Gejala tidak dicatat'} pada ${c.komoditas||'komoditas'}${c.plot?(' — '+c.plot):''}. ${criticalOpen.length>1?`(+${criticalOpen.length-1} laporan kritis lain menunggu tindak lanjut)`:'Menunggu tindak lanjut Supervisor/Agronomis.'}`;
+      alertBox.classList.remove('hidden');
+    } else {
+      alertBox.classList.add('hidden');
+    }
+  }
   document.getElementById('w-beranda-preview').innerHTML = active.length ? active.slice(0,2).map(t=>`
     <div class="card p-3 mb-2 clickable" onclick="openTaskDetail('${t.id}')">
       <div class="flex justify-between items-start"><p class="font-bold text-[12.5px] text-gray-800">${t.act}</p>${statusBadge(t.status)}</div>
@@ -2108,12 +2556,21 @@ function renderWorkerLists(){
       <div class="flex justify-between items-start"><p class="font-bold text-[12.5px] text-gray-800">${h.act}</p>${statusBadge(h.status)}</div>
       <p class="text-[11px] text-gray-500 mt-0.5">${h.plot} · ${h.submittedAt ? new Date(h.submittedAt).toLocaleDateString('id-ID') : h.scheduledDate}</p>
     </div>`).join('') : emptyCard('Belum ada riwayat tugas.');
-  const syncMap = {'Tersinkron':'b-green','Menunggu sinkronisasi':'b-amber','Tersimpan di perangkat':'b-gray','Konflik':'b-red'};
-  document.getElementById('w-sync-list').innerHTML = syncQueue.length ? syncQueue.map(s=>`
+  const myReports = (incomingReports||[]).filter(r=>currentUser && r.reporterId===currentUser.id);
+  const reportBadge = {Menunggu:'b-amber', Disetujui:'b-green', Revisi:'b-red', Ditolak:'b-gray'};
+  const lhList = document.getElementById('w-lapor-history-list');
+  if(lhList) lhList.innerHTML = myReports.length ? myReports.map(r=>`
+    <div class="card p-3 clickable" onclick="openReport('${r.id}')">
+      <div class="flex justify-between items-start"><p class="font-bold text-[12.5px] text-gray-800">${r.jenisGejala||r.act||'Lapor Masalah'}</p><span class="badge ${reportBadge[r.status]||'b-amber'}">${r.status||'Menunggu'}</span></div>
+      <p class="text-[11px] text-gray-500 mt-0.5">${r.komoditas||'-'} · ${r.time||''}</p>
+    </div>`).join('') : emptyCard('Anda belum pernah membuat laporan masalah.');
+
+  const syncMap = {'Menyinkronkan…':'b-amber','Menunggu sinyal':'b-amber','Tersimpan di perangkat':'b-gray'};
+  document.getElementById('w-sync-list').innerHTML = offlineQueue.length ? offlineQueue.map(s=>`
     <div class="card p-3 flex justify-between items-center">
-      <span class="text-[12.5px]">${s.name}</span>
-      <span class="badge ${syncMap[s.state]}">${s.state}</span>
-    </div>`).join('') : emptyCard('Tidak ada item yang perlu disinkronkan.');
+      <span class="text-[12.5px]">${s.label}</span>
+      <span class="badge ${syncMap[s.state] || 'b-red'}">${s.state}</span>
+    </div>`).join('') : emptyCard('Tidak ada item yang perlu disinkronkan — semua data sudah tersimpan di server.');
 }
 function wShow(name){
   document.querySelectorAll('#role-worker .screen').forEach(s=>s.classList.remove('active'));
@@ -2167,9 +2624,9 @@ function openTaskDetail(id){
     <label class="field-label">Catatan / hambatan</label>
     <textarea rows="2" id="task-notes" placeholder="Tidak ada hambatan" class="mb-4" ${canWork?'':'disabled'}>${t.notes||''}</textarea>
     ${canWork ? `<div class="flex gap-2">
-      ${t.status==='in_progress' ? `<button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="taskAction('pause')">Pause</button>` :
-        `<button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] border border-gray-300 text-gray-600" onclick="taskAction('start')">${isPaused?'Lanjutkan':'Mulai'}</button>`}
-      <button class="flex-1 py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="taskAction('submit')">Selesai &amp; Kirim</button>
+      ${t.status==='in_progress' ? `<button class="btn btn-secondary" style="flex:1;" onclick="taskAction('pause')">Pause</button>` :
+        `<button class="btn btn-secondary" style="flex:1;" onclick="taskAction('start')">${isPaused?'Lanjutkan':'Mulai'}</button>`}
+      <button class="btn btn-primary" style="flex:1;" onclick="taskAction('submit')">Selesai &amp; Kirim</button>
     </div>` : `<p class="text-[11.5px] text-gray-400 text-center pt-2">Tugas ini sudah ${WO_STATUS_LABEL[t.status]||t.status} — tidak bisa diubah lagi.</p>`}`;
   wShow('detail');
 }
@@ -2178,7 +2635,15 @@ async function toggleTaskSop(idx, checked){
   if(!t) return;
   if(!t.sopChecked) t.sopChecked = t.sop.map(()=>false);
   t.sopChecked[idx] = checked;
-  try{ await apiPut('/workorders/'+t.id, {sopChecked:t.sopChecked}); }catch(e){ toast('Gagal menyimpan checklist: '+(e.message||'')); }
+  try{
+    await apiPut('/workorders/'+t.id, {sopChecked:t.sopChecked});
+  }catch(e){
+    if(isNetworkError(e)){
+      queueOfflineAction('PUT', '/workorders/'+t.id, {sopChecked:t.sopChecked}, 'Checklist SOP: '+t.act);
+    } else {
+      toast('Gagal menyimpan checklist: '+(e.message||''));
+    }
+  }
 }
 async function taskAction(action){
   const t = workOrders.find(x=>x.id===currentTaskId);
@@ -2192,6 +2657,7 @@ async function taskAction(action){
     body.photos = { ...taskPhotos };
     body.sopChecked = t.sopChecked;
   }
+  const NEXT_STATUS_IF_OFFLINE = {start:'in_progress', pause:'paused', submit:'submitted'};
   try{
     const updated = await apiPut('/workorders/'+t.id, body);
     const idx = workOrders.findIndex(x=>x.id===t.id);
@@ -2209,6 +2675,26 @@ async function taskAction(action){
     }
     if(typeof renderSupervisor === 'function') renderSupervisor();
   }catch(e){
+    if(isNetworkError(e)){
+      /* Tidak ada sinyal — simpan perubahan secara optimis di tampilan
+       * pekerja (supaya dia bisa lanjut kerja), tapi SUNGGUHAN dikirim ke
+       * server lewat antrean offline saat sinyal kembali, bukan dianggap
+       * selesai begitu saja. */
+      Object.assign(t, body, {status: NEXT_STATUS_IF_OFFLINE[action] || t.status});
+      queueOfflineAction('PUT', '/workorders/'+t.id, body, (action==='submit'?'Kirim laporan: ':action==='pause'?'Jeda tugas: ':'Mulai tugas: ')+t.act);
+      renderWorkerLists();
+      if(action==='submit'){
+        toast('Belum ada sinyal — laporan tersimpan di perangkat, akan terkirim otomatis saat online.');
+        wShow('tugas');
+      }else if(action==='pause'){
+        toast('Belum ada sinyal — status "dijeda" tersimpan di perangkat.');
+        openTaskDetail(t.id);
+      }else{
+        toast('Belum ada sinyal — status "dimulai" tersimpan di perangkat.');
+        openTaskDetail(t.id);
+      }
+      return;
+    }
     toast('Gagal menyimpan: ' + (e.message||'coba lagi'));
   }
 }
@@ -2261,9 +2747,26 @@ async function kirimLaporanMasalah(){
     });
     toast('Laporan masalah (dengan foto) terkirim ke Agronomis');
     wShow('beranda');
+    renderWorkerLists();
     if(typeof renderSupervisor === 'function') renderSupervisor();
+    if(typeof renderAgronomist === 'function') renderAgronomist();
   }catch(e){
-    toast('Gagal mengirim laporan: ' + (e.message||'coba lagi'));
+    if(isNetworkError(e)){
+      /* Tidak ada sinyal — simpan laporan (dengan foto) di perangkat dulu,
+       * benar-benar dikirim ke Agronomis saat sinyal kembali. */
+      queueOfflineAction('POST', '/incomingReports', payload, 'Lapor Masalah: ' + (payload.jenisGejala || payload.komoditas || '-'));
+      Object.keys(uploadedPhotos).forEach(k=>delete uploadedPhotos[k]);
+      document.querySelectorAll('#role-worker .upload-box').forEach(slot=>{
+        slot.style.backgroundImage = '';
+        const span = slot.querySelector('span');
+        if(span) span.style.display = '';
+      });
+      toast('Belum ada sinyal — laporan (dengan foto) tersimpan di perangkat, akan terkirim otomatis.');
+      wShow('beranda');
+      renderWorkerLists();
+    } else {
+      toast('Gagal mengirim laporan: ' + (e.message||'coba lagi'));
+    }
   }finally{
     btn.disabled = false;
     btn.innerText = 'Kirim Laporan';
@@ -2460,11 +2963,11 @@ async function registerAccount(){
   }
 }
 
-function syncNow(){
-  syncQueue.forEach(s=> s.state='Tersinkron');
-  renderWorkerLists();
-  toast('4 transaksi berhasil disinkronkan');
-}
+/* syncNow() asli (fungsi sungguhan, bukan cuma ubah tampilan) sudah
+ * didefinisikan di atas dekat helper API — lihat bagian SINKRONISASI
+ * OFFLINE. Definisi palsu yang pernah ada di sini (hanya mengubah status
+ * tanpa pernah mengirim apa pun ke server) sudah dihapus pada perbaikan
+ * Okt 2026 ini. */
 
 /* ===================== SUPERVISOR SCREENS ===================== */
 function sShow(name){
@@ -2473,15 +2976,100 @@ function sShow(name){
   document.querySelectorAll('#role-supervisor .sidebar button').forEach(b=>b.classList.remove('active'));
   document.querySelector(`#role-supervisor .sidebar button[data-navs="${name}"]`).classList.add('active');
 }
+function renderSupervisorDashboard(){
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0,10);
+  const dateEl = document.getElementById('s-dash-date');
+  if(dateEl) dateEl.textContent = now.toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  const metaEl = document.getElementById('s-dash-meta');
+  if(metaEl) metaEl.textContent = `Data langsung dari sistem, per ${now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB — ${cropCycles.length} crop cycle, ${locations.length} lokasi dipantau`;
+
+  const activeWos = workOrders.filter(w=>w.status!=='cancelled');
+  const todayWos = workOrders.filter(w=>w.scheduledDate===todayIso);
+  const todayDone = todayWos.filter(w=>w.status==='approved').length;
+  document.getElementById('s-stat-tugas').textContent = todayWos.length;
+  document.getElementById('s-stat-tugas-sub').textContent = `${todayDone} selesai`;
+
+  const approvedCount = activeWos.filter(w=>w.status==='approved').length;
+  const completionEl = document.getElementById('s-stat-completion');
+  const completionSubEl = document.getElementById('s-stat-completion-sub');
+  if(activeWos.length){
+    completionEl.textContent = Math.round(approvedCount/activeWos.length*100)+'%';
+    completionSubEl.textContent = `${approvedCount} dari ${activeWos.length} tugas`;
+  } else {
+    completionEl.textContent = '—';
+    completionSubEl.textContent = 'Belum ada work order';
+  }
+
+  const criticalOpen = incomingReports.filter(r=>Number(r.severity)>=4 && r.status==='Menunggu');
+  document.getElementById('s-stat-kritis').textContent = criticalOpen.length;
+  document.getElementById('s-stat-kritis-sub').textContent = criticalOpen.length ? 'Perlu tindakan' : 'Tidak ada';
+
+  const todayAttendance = attendance.filter(a=>!a.date || a.date===todayIso);
+  const hadirEl = document.getElementById('s-stat-hadir');
+  const hadirSubEl = document.getElementById('s-stat-hadir-sub');
+  if(todayAttendance.length){
+    const hadirCount = todayAttendance.filter(a=>a.status==='Hadir').length;
+    hadirEl.textContent = `${hadirCount}/${todayAttendance.length}`;
+    const izin = todayAttendance.length - hadirCount;
+    hadirSubEl.textContent = izin ? `${izin} izin` : 'Semua hadir';
+  } else {
+    hadirEl.textContent = '—';
+    hadirSubEl.textContent = 'Belum ada data hari ini';
+  }
+
+  /* "Perlu perhatian" — hanya berisi kondisi yang benar-benar terjadi di data, tidak ada contoh statis */
+  const attention = [];
+  criticalOpen.forEach(r=>attention.push({ text: `${r.jenisGejala||'Masalah dilaporkan'} — ${r.komoditas||r.plot||'lokasi tidak dicatat'}`, badge:'b-red', label:'Kritis' }));
+  const twoHoursAgo = Date.now() - 2*60*60*1000;
+  const staleReports = incomingReports.filter(r=>r.status==='Menunggu' && r.createdAt && new Date(r.createdAt).getTime() < twoHoursAgo);
+  if(staleReports.length) attention.push({ text: `${staleReports.length} laporan menunggu verifikasi lebih dari 2 jam`, badge:'b-amber', label:'Perlu review' });
+  const lowStock = (itemMaster||[]).filter(it=>Number(it.stock) < Number(it.min));
+  lowStock.slice(0,3).forEach(it=>attention.push({ text: `Stok ${it.name} di bawah minimum (${it.stock} ${it.unit||''} / min ${it.min})`, badge:'b-amber', label:'Stok' }));
+  document.getElementById('s-perlu-perhatian').innerHTML = attention.length
+    ? attention.map(a=>`<div class="card p-3 flex justify-between items-center"><span class="text-[13px]">${a.text}</span><span class="badge ${a.badge}">${a.label}</span></div>`).join('')
+    : '<div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Tidak ada hal yang perlu perhatian khusus saat ini.</p></div>';
+
+  /* Peta Lahan — daftar crop cycle nyata (bukan peta visual, karena belum ada data koordinat per petak) */
+  const mapList = document.getElementById('s-map-cyclelist');
+  if(mapList){
+    mapList.innerHTML = cropCycles.length ? cropCycles.map(c=>{
+      const hasCritical = incomingReports.some(r=>r.status==='Menunggu' && Number(r.severity)>=4 && (r.komoditas===c.crop || r.plot===c.plot));
+      return `<div class="card p-3 clickable" onclick="openCropCycleDetail('${c.id}')">
+        <div class="flex justify-between items-start mb-1"><p class="font-bold text-[13px]">${c.id} — ${c.crop}</p>${hasCritical?'<span class="badge b-red">Kritis</span>':`<span class="badge b-green">${c.status}</span>`}</div>
+        <p class="text-[11.5px] text-gray-500">${c.location||'-'} · ${c.plot}</p>
+      </div>`;
+    }).join('') : '<p class="text-[12.5px] text-gray-400 text-center py-6" style="grid-column:1/-1;">Belum ada crop cycle terdaftar.</p>';
+    document.getElementById('s-map-count').textContent = `${cropCycles.length} crop cycle ditampilkan`;
+  }
+
+  /* Status pekerjaan — sumber sama persis dengan Papan Tugas (Kanban), supaya tidak ada dua angka berbeda untuk data yang sama */
+  document.getElementById('s-st-assigned').textContent = workOrders.filter(w=>w.status==='assigned').length;
+  document.getElementById('s-st-inprogress').textContent = workOrders.filter(w=>['in_progress','paused'].includes(w.status)).length;
+  document.getElementById('s-st-revision').textContent = workOrders.filter(w=>w.status==='revision').length;
+  document.getElementById('s-st-submitted').textContent = workOrders.filter(w=>w.status==='submitted').length;
+  document.getElementById('s-st-approved').textContent = workOrders.filter(w=>w.status==='approved').length;
+}
 function renderSupervisor(){
-  const days = ['Sen','Sel','Rab','Kam','Jum','Sab','Min'];
-  document.getElementById('s-kalender-grid').innerHTML = days.map((d,i)=>`
-    <div class="card p-2" style="min-height:150px;">
-      <p class="font-bold text-[11px] text-gray-500 mb-1">${d} · ${11+i} Agu</p>
-      ${i===1?'<div class="badge b-blue mb-1" style="display:block;">Treatment A3</div>':''}
-      ${i===2?'<div class="badge b-amber mb-1" style="display:block;">Fertigasi B2</div><div class="badge b-gray mb-1" style="display:block;">Scouting A1</div>':''}
-      ${i===4?'<div class="badge b-green mb-1" style="display:block;">Panen C1</div>':''}
-    </div>`).join('');
+  renderSupervisorDashboard();
+
+  /* Kalender minggu berjalan, diisi dari work order yang benar-benar terjadwal */
+  const dayNames = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+  const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay()+6)%7));
+  const weekDates = Array.from({length:7}, (_,i)=>{ const d = new Date(monday); d.setDate(monday.getDate()+i); return d; });
+  const badgeClass = {assigned:'b-blue', in_progress:'b-amber', paused:'b-amber', revision:'b-red', submitted:'b-blue', approved:'b-green', cancelled:'b-gray'};
+  document.getElementById('s-kalender-grid').innerHTML = weekDates.map(d=>{
+    const iso = d.toISOString().slice(0,10);
+    const isToday = iso === today.toISOString().slice(0,10);
+    const dayWos = workOrders.filter(w=>w.scheduledDate === iso);
+    return `<div class="card p-2" style="min-height:150px; ${isToday?'border-color:var(--green-600); box-shadow:0 0 0 1.5px var(--green-600);':''}">
+      <p class="font-bold text-[11px] text-gray-500 mb-1">${dayNames[d.getDay()]} · ${d.getDate()} ${d.toLocaleDateString('id-ID',{month:'short'})}</p>
+      ${dayWos.length ? dayWos.slice(0,4).map(w=>`<div class="badge ${badgeClass[w.status]||'b-gray'} mb-1" style="display:block;">${w.act} · ${w.plot||'-'}</div>`).join('') : '<p class="text-[10px] text-gray-300">—</p>'}
+      ${dayWos.length>4?`<p class="text-[10px] text-gray-400">+${dayWos.length-4} lagi</p>`:''}
+    </div>`;
+  }).join('');
 
   const KANBAN_GROUPS = [
     {key:'assigned', label:'Ditugaskan', color:'#2563eb', match: w=>w.status==='assigned'},
@@ -2525,12 +3113,18 @@ function renderSupervisor(){
       </div>
     </div>`).join('') : '<div class="card p-4 text-center"><p class="text-[12px] text-gray-400">Tidak ada permintaan approval saat ini.</p></div>';
 
-  const prodData = [{n:'Regu Mawar',v:82},{n:'Regu Melati',v:74},{n:'Regu Kenanga',v:91}];
-  document.getElementById('s-produktivitas-chart').innerHTML = prodData.map(p=>`
+  /* Produktivitas per tim — dihitung dari rasio work order Disetujui terhadap seluruh work order tim (bukan angka contoh) */
+  const teamNames = [...new Set(workOrders.map(w=>w.team).filter(t=>t && t!=='-'))];
+  const prodData = teamNames.map(n=>{
+    const teamWos = workOrders.filter(w=>w.team===n && w.status!=='cancelled');
+    const done = teamWos.filter(w=>w.status==='approved').length;
+    return { n, v: teamWos.length ? Math.round(done/teamWos.length*100) : 0, total: teamWos.length };
+  });
+  document.getElementById('s-produktivitas-chart').innerHTML = prodData.length ? prodData.map(p=>`
     <div>
-      <div class="flex justify-between text-[12.5px] mb-1"><span class="font-semibold">${p.n}</span><span class="text-gray-500">${p.v}%</span></div>
+      <div class="flex justify-between text-[12.5px] mb-1"><span class="font-semibold">${p.n}</span><span class="text-gray-500">${p.v}% <span class="text-gray-400">(${p.total} tugas)</span></span></div>
       <div class="progress-bar"><div style="width:${p.v}%"></div></div>
-    </div>`).join('');
+    </div>`).join('') : '<p class="text-[12px] text-gray-400">Belum ada work order yang tercatat untuk dihitung produktivitasnya.</p>';
 
   renderRkh();
   renderRkb();
@@ -2659,6 +3253,15 @@ async function approveTreatmentAndAssign(){
   if(!diagnosis || !product || !assignedTo){
     toast('Diagnosis, produk, dan pekerja yang ditugaskan wajib diisi'); return;
   }
+  /* Ditambahkan setelah audit keamanan (Okt 2026): sebelumnya kotak
+   * peringatan status produk cuma tampilan — tombol ini tetap bisa
+   * membuat Work Order walau produknya Suspended/belum Approved. Sekarang
+   * diblokir sungguhan di sini sebelum request dikirim. */
+  const pCheck = productDb.find(x=>x.name===product);
+  if(pCheck && pCheck.status !== 'Approved'){
+    toast('Tidak bisa dibuat — produk "'+product+'" berstatus "'+pCheck.status+'", bukan Approved.');
+    return;
+  }
   const dosis = document.getElementById('atr-dosis').value;
   const luas = document.getElementById('atr-luas').value;
   const volume = document.getElementById('atr-volume').value;
@@ -2719,6 +3322,19 @@ function renderAgronomist(){
     </div>`;
   }).join('');
 
+  /* Crop Health Map — daftar crop cycle nyata (bukan peta visual, karena belum ada data koordinat/scouting per petak) */
+  document.getElementById('a-health-cyclelist').innerHTML = cropCycles.length ? cropCycles.map(c=>`
+    <div class="card p-3 clickable" onclick="openCropCycleDetail('${c.id}')">
+      <div class="flex justify-between items-start mb-1">
+        <p class="font-bold text-[13px]">${c.id} — ${c.crop}</p>
+        <span class="badge ${statusMap[c.status]||'b-gray'}">${c.status}</span>
+      </div>
+      <p class="text-[11.5px] text-gray-500">${c.location||'-'} · ${c.plot}</p>
+    </div>`).join('') : '<p class="text-[12.5px] text-gray-400 text-center py-6" style="grid-column:1/-1;">Belum ada crop cycle terdaftar.</p>';
+  const riskReports = incomingReports.filter(r=>Number(r.severity)>=2 && r.status==='Menunggu').sort((a,b)=>Number(b.severity)-Number(a.severity)).slice(0,5);
+  document.getElementById('a-health-risklist').innerHTML = riskReports.length ? riskReports.map(r=>`
+    <div class="card p-2.5 clickable" onclick="openReport('${r.id}')"><p class="text-[12.5px] font-bold">${r.komoditas||r.plot||'Lokasi tidak dicatat'}</p><p class="text-[11px] text-gray-500">${r.jenisGejala||'Gejala tidak dicatat'} · severity ${r.severity}/5</p></div>`).join('') : '<p class="text-[12px] text-gray-400">Tidak ada laporan masalah terbuka saat ini.</p>';
+
   document.getElementById('a-scouting-body').innerHTML = scoutingSessions.map(s=>`
     <tr><td>${s.date}</td><td>${s.plot}</td><td>${s.scout}</td><td>${s.find}</td>
     <td>${s.sev>0?'<span class="badge '+(s.sev>=4?'b-red':'b-amber')+'">'+s.sev+'/5</span>':'<span class="badge b-green">0/5</span>'}</td>
@@ -2760,7 +3376,7 @@ function hShow(name){
   document.querySelector(`#role-warehouse .screen[data-h="${name}"]`).classList.add('active');
   document.querySelectorAll('#role-warehouse .sidebar button').forEach(b=>b.classList.remove('active'));
   document.querySelector(`#role-warehouse .sidebar button[data-navh="${name}"]`).classList.add('active');
-  if(['penerimaan','pengeluaran','batch','pr'].includes(name)) loadStockData();
+  if(['dashboard','penerimaan','pengeluaran','batch','pr'].includes(name)) loadStockData();
 }
 function itemOptionsHtml(){
   return '<option value="">— Pilih barang —</option>' + itemMaster.map(it=>`<option value="${it.id}">${it.name} (stok: ${it.stock} ${it.unit})</option>`).join('');
@@ -2778,6 +3394,16 @@ async function loadStockData(){
     const openWos = workOrders.filter(w=>['assigned','in_progress','paused'].includes(w.status));
     woSel.innerHTML = '<option value="">— Tanpa referensi work order —</option>' + openWos.map(w=>`<option value="${w.id}">${w.id} — ${w.act}, ${w.plot}</option>`).join('');
   }
+  const rcvPoSel = document.getElementById('rcv-po-select');
+  if(rcvPoSel){
+    const openPos = (purchaseOrders||[]).filter(p=>['sent','partial'].includes(p.status));
+    rcvPoSel.innerHTML = '<option value="">— Tanpa PO —</option>' + openPos.map(p=>`<option value="${p.id}">${p.poNo||p.id} — ${p.supplierName||''}</option>`).join('');
+  }
+  const issMwoSel = document.getElementById('iss-mwo');
+  if(issMwoSel){
+    const openMwos = (maintenanceWorkOrders||[]).filter(m=>['assigned','in_progress'].includes(m.status));
+    issMwoSel.innerHTML = '<option value="">— Tanpa referensi maintenance —</option>' + openMwos.map(m=>`<option value="${m.id}">${m.id} — ${m.assetName||m.assetId||''}</option>`).join('');
+  }
   const rcvBody = document.getElementById('rcv-history-body');
   if(rcvBody){
     const receipts = stockTransactions.filter(t=>t.type==='in');
@@ -2794,6 +3420,7 @@ async function loadStockData(){
     batchBody.innerHTML = receipts.length ? receipts.map(t=>`<tr><td>${t.itemName}</td><td>${t.batch}</td><td>${t.qty} ${t.unit}</td><td>${t.expiry ? new Date(t.expiry).toLocaleDateString('id-ID') : '-'}</td><td>${new Date(t.createdAt).toLocaleDateString('id-ID')}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-gray-400">Belum ada data batch.</td></tr>';
   }
   renderPrList();
+  renderWarehouseDashboard();
 }
 async function saveStockReceive(){
   const itemId = document.getElementById('rcv-item').value;
@@ -2804,13 +3431,15 @@ async function saveStockReceive(){
       itemId, qty,
       batch: document.getElementById('rcv-batch').value,
       expiry: document.getElementById('rcv-expiry').value,
-      po: document.getElementById('rcv-po').value,
+      purchaseOrderId: document.getElementById('rcv-po-select').value || null,
       condition: document.getElementById('rcv-condition').value,
     });
     itemMaster = await apiGet('/itemMaster');
+    purchaseOrders = await apiGet('/purchaseOrders');
     renderItemMaster();
     await loadStockData();
-    ['rcv-qty','rcv-batch','rcv-po'].forEach(id=>document.getElementById(id).value='');
+    ['rcv-qty','rcv-batch'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('rcv-po-select').value='';
     document.getElementById('rcv-expiry').value='';
     toast('Penerimaan barang tercatat, stok diperbarui');
   }catch(e){
@@ -2829,14 +3458,17 @@ async function saveStockIssue(){
     await apiPost('/stock/issue', {
       itemId, qty,
       workOrderId: document.getElementById('iss-wo').value || null,
+      maintenanceWorkOrderId: document.getElementById('iss-mwo').value || null,
       recipient: document.getElementById('iss-recipient').value,
       reason: document.getElementById('iss-reason').value,
       batch: document.getElementById('iss-batch').value,
     });
     itemMaster = await apiGet('/itemMaster');
+    maintenanceWorkOrders = await apiGet('/maintenanceWorkOrders');
     renderItemMaster();
     await loadStockData();
     ['iss-qty','iss-batch','iss-recipient','iss-reason'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('iss-mwo').value='';
     document.getElementById('iss-stock').value='';
     toast('Pengeluaran barang tercatat, stok diperbarui');
   }catch(e){
@@ -2941,6 +3573,468 @@ async function deleteAdminLocation(id){
     toast('Lokasi dihapus');
     renderAdminLocations();
   }catch(e){ toast(e.message || 'Gagal menghapus lokasi'); }
+}
+
+/* --- Blok (referensi, Okt 2026) --- */
+function renderAdminBlocks(){
+  const body = document.getElementById('adm-block-body');
+  if(!body) return;
+  if(!blocks.length){ body.innerHTML = `<tr><td colspan="4" class="text-center text-gray-400 py-4">Belum ada blok.</td></tr>`; return; }
+  body.innerHTML = blocks.map(b=>`
+    <tr>
+      <td class="font-semibold">${b.code||'-'}</td>
+      <td>${b.name}</td>
+      <td>${b.location||'-'}</td>
+      <td>${b.notes||'-'}</td>
+      <td class="text-right"><button class="text-[11px] font-bold text-red-600" onclick="deleteAdminBlock('${b.id}')">Hapus</button></td>
+    </tr>`).join('');
+}
+function openAdminBlockForm(){
+  openPanelHTML(panelHeader('Tambah Blok', 'Blok adalah sub-area dari sebuah Lokasi') + `
+    <div class="p-5 text-[13px] space-y-3">
+      <div id="adm-block-error" class="hidden card p-2.5 text-[12px] font-semibold" style="background:var(--red-100); color:var(--red-700); border-color:#fecaca;"></div>
+      <div><label class="field-label">Kode blok</label><input type="text" id="adm-block-code" placeholder="mis. BLK-pabuaran-gh"></div>
+      <div><label class="field-label">Nama blok</label><input type="text" id="adm-block-name" placeholder="mis. Pabuaran — Greenhouse"></div>
+      <div><label class="field-label">Lokasi (opsional)</label><input type="text" id="adm-block-location" placeholder="mis. Pabuaran"></div>
+      <div><label class="field-label">Catatan (opsional)</label><textarea id="adm-block-notes" rows="2"></textarea></div>
+      <button class="w-full py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveAdminBlock()">Simpan Blok</button>
+    </div>`);
+}
+async function saveAdminBlock(){
+  const code = document.getElementById('adm-block-code').value.trim();
+  const name = document.getElementById('adm-block-name').value.trim();
+  const location = document.getElementById('adm-block-location').value.trim();
+  const notes = document.getElementById('adm-block-notes').value.trim();
+  const errEl = document.getElementById('adm-block-error');
+  errEl.classList.add('hidden');
+  if(!name){ errEl.textContent = 'Nama blok wajib diisi.'; errEl.classList.remove('hidden'); return; }
+  try{
+    const saved = await apiPost('/blocks', { code, name, location, notes });
+    blocks.unshift(saved);
+    closePanel(); toast('Blok "'+name+'" ditambahkan');
+    renderAdminBlocks();
+  }catch(e){ errEl.textContent = e.message || 'Gagal menyimpan blok.'; errEl.classList.remove('hidden'); }
+}
+async function deleteAdminBlock(id){
+  const b = blocks.find(x=>x.id===id);
+  if(!confirm('Hapus blok "'+(b?b.name:id)+'"?')) return;
+  try{
+    await apiDelete('/blocks/'+id);
+    blocks = blocks.filter(x=>x.id!==id);
+    toast('Blok dihapus');
+    renderAdminBlocks();
+  }catch(e){ toast(e.message || 'Gagal menghapus blok'); }
+}
+
+/* --- Komoditas (referensi, Okt 2026) --- */
+function renderAdminCommodities(){
+  const body = document.getElementById('adm-commodity-body');
+  if(!body) return;
+  if(!commodities.length){ body.innerHTML = `<tr><td colspan="3" class="text-center text-gray-400 py-4">Belum ada komoditas.</td></tr>`; return; }
+  body.innerHTML = commodities.map(c=>`
+    <tr>
+      <td class="font-semibold">${c.name}</td>
+      <td>${c.category||'-'}</td>
+      <td>${c.notes||'-'}</td>
+      <td class="text-right"><button class="text-[11px] font-bold text-red-600" onclick="deleteAdminCommodity('${c.id}')">Hapus</button></td>
+    </tr>`).join('');
+}
+function openAdminCommodityForm(){
+  openPanelHTML(panelHeader('Tambah Komoditas', 'Dipakai sebagai referensi perencanaan') + `
+    <div class="p-5 text-[13px] space-y-3">
+      <div id="adm-comm-error" class="hidden card p-2.5 text-[12px] font-semibold" style="background:var(--red-100); color:var(--red-700); border-color:#fecaca;"></div>
+      <div><label class="field-label">Nama komoditas</label><input type="text" id="adm-comm-name" placeholder="mis. Cabai"></div>
+      <div><label class="field-label">Kategori (opsional)</label><input type="text" id="adm-comm-category" placeholder="mis. Sayuran"></div>
+      <div><label class="field-label">Catatan (opsional)</label><textarea id="adm-comm-notes" rows="2"></textarea></div>
+      <button class="w-full py-2.5 rounded-lg font-bold text-[13px] text-white" style="background:var(--green-600);" onclick="saveAdminCommodity()">Simpan Komoditas</button>
+    </div>`);
+}
+async function saveAdminCommodity(){
+  const name = document.getElementById('adm-comm-name').value.trim();
+  const category = document.getElementById('adm-comm-category').value.trim();
+  const notes = document.getElementById('adm-comm-notes').value.trim();
+  const errEl = document.getElementById('adm-comm-error');
+  errEl.classList.add('hidden');
+  if(!name){ errEl.textContent = 'Nama komoditas wajib diisi.'; errEl.classList.remove('hidden'); return; }
+  try{
+    const saved = await apiPost('/commodities', { name, category, notes });
+    commodities.unshift(saved);
+    closePanel(); toast('Komoditas "'+name+'" ditambahkan');
+    renderAdminCommodities();
+  }catch(e){ errEl.textContent = e.message || 'Gagal menyimpan komoditas.'; errEl.classList.remove('hidden'); }
+}
+async function deleteAdminCommodity(id){
+  const c = commodities.find(x=>x.id===id);
+  if(!confirm('Hapus komoditas "'+(c?c.name:id)+'"?')) return;
+  try{
+    await apiDelete('/commodities/'+id);
+    commodities = commodities.filter(x=>x.id!==id);
+    toast('Komoditas dihapus');
+    renderAdminCommodities();
+  }catch(e){ toast(e.message || 'Gagal menghapus komoditas'); }
+}
+
+/* ===================== PURCHASING (role baru, Okt 2026) ===================== */
+function pShow(name){
+  document.querySelectorAll('#role-purchasing .screen').forEach(s=>s.classList.remove('active'));
+  document.querySelector(`#role-purchasing .screen[data-p="${name}"]`).classList.add('active');
+  document.querySelectorAll('#role-purchasing .sidebar button').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`#role-purchasing .sidebar button[data-navp="${name}"]`).classList.add('active');
+  if(name==='po') fillPoFormSelects();
+  if(name==='invoice') fillInvoiceFormSelects();
+}
+function renderPurchasingDashboard(){
+  const elS = document.getElementById('p-stat-suppliers'); if(elS) elS.textContent = suppliers.length;
+  const openPo = purchaseOrders.filter(p=>['sent','partial'].includes(p.status));
+  const elP = document.getElementById('p-stat-openpo'); if(elP) elP.textContent = openPo.length;
+  const pendingInv = purchaseInvoices.filter(i=>i.matchStatus==='pending');
+  const elI = document.getElementById('p-stat-pendinginv'); if(elI) elI.textContent = pendingInv.length;
+  const discInv = purchaseInvoices.filter(i=>i.matchStatus==='discrepancy');
+  const elD = document.getElementById('p-stat-discrepancy'); if(elD) elD.textContent = discInv.length;
+  const body = document.getElementById('p-dash-po-body');
+  if(body){
+    const recent = purchaseOrders.slice(0,8);
+    body.innerHTML = recent.length ? recent.map(p=>`
+      <tr><td class="font-semibold">${p.poNo||p.id}</td><td>${p.supplierName||'-'}</td><td><span class="badge ${poStatusBadge(p.status)}">${poStatusLabel(p.status)}</span></td><td>${p.createdAt ? new Date(p.createdAt).toLocaleDateString('id-ID') : '-'}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="text-center text-gray-400 py-4">Belum ada Purchase Order.</td></tr>';
+  }
+}
+function poStatusLabel(s){ return {sent:'Dikirim', partial:'Diterima Sebagian', received:'Diterima Penuh'}[s] || s || '-'; }
+function poStatusBadge(s){ return {sent:'b-blue', partial:'b-amber', received:'b-green'}[s] || 'b-gray'; }
+
+/* --- Supplier --- */
+function toggleSupplierForm(){ document.getElementById('supplier-form').classList.toggle('hidden'); }
+function renderSuppliers(){
+  const body = document.getElementById('supplier-body');
+  if(!body) return;
+  body.innerHTML = suppliers.length ? suppliers.map(s=>`
+    <tr><td class="font-semibold">${s.name}</td><td>${s.contact||'-'}</td><td>${s.address||'-'}</td><td>${s.notes||'-'}</td>
+    <td class="text-right"><button class="text-[11px] font-bold text-red-600" onclick="deleteSupplier('${s.id}')">Hapus</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-center text-gray-400 py-4">Belum ada supplier.</td></tr>';
+}
+async function saveSupplier(){
+  const name = document.getElementById('sup-name').value.trim();
+  if(!name){ toast('Nama supplier wajib diisi.'); return; }
+  try{
+    const saved = await apiPost('/suppliers', {
+      name, contact: document.getElementById('sup-contact').value.trim(),
+      address: document.getElementById('sup-address').value.trim(),
+      notes: document.getElementById('sup-notes').value.trim(),
+    });
+    suppliers.unshift(saved);
+    ['sup-name','sup-contact','sup-address','sup-notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('supplier-form').classList.add('hidden');
+    toast('Supplier "'+name+'" ditambahkan'); renderSuppliers();
+  }catch(e){ toast(e.message || 'Gagal menyimpan supplier.'); }
+}
+async function deleteSupplier(id){
+  const s = suppliers.find(x=>x.id===id);
+  if(!confirm('Hapus supplier "'+(s?s.name:id)+'"?')) return;
+  try{ await apiDelete('/suppliers/'+id); suppliers = suppliers.filter(x=>x.id!==id); toast('Supplier dihapus'); renderSuppliers(); }
+  catch(e){ toast(e.message || 'Gagal menghapus supplier'); }
+}
+
+/* --- Purchase Order --- */
+let poLines = [];
+function togglePoForm(){
+  document.getElementById('po-form').classList.toggle('hidden');
+  fillPoFormSelects();
+}
+function fillPoFormSelects(){
+  const supSel = document.getElementById('po-supplier');
+  if(supSel) supSel.innerHTML = '<option value="">— Pilih supplier —</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const itemSel = document.getElementById('po-item');
+  if(itemSel) itemSel.innerHTML = itemOptionsHtml();
+}
+function addPoLine(){
+  const itemSel = document.getElementById('po-item');
+  const itemId = itemSel.value;
+  const qty = Number(document.getElementById('po-item-qty').value);
+  const price = Number(document.getElementById('po-item-price').value) || 0;
+  if(!itemId || !qty || qty<=0){ toast('Pilih barang dan isi qty lebih dari 0.'); return; }
+  const item = itemMaster.find(i=>i.id===itemId);
+  poLines.push({ itemId, itemName: item?item.name:itemId, qtyOrdered: qty, qtyReceived: 0, price });
+  document.getElementById('po-item-qty').value=''; document.getElementById('po-item-price').value='';
+  renderPoLinesTable();
+}
+function removePoLine(idx){ poLines.splice(idx,1); renderPoLinesTable(); }
+function renderPoLinesTable(){
+  const body = document.getElementById('po-lines-body');
+  body.innerHTML = poLines.length ? poLines.map((l,idx)=>`
+    <tr><td>${l.itemName}</td><td>${l.qtyOrdered}</td><td>Rp ${Number(l.price).toLocaleString('id-ID')}</td>
+    <td class="text-right"><button class="text-[11px] font-bold text-red-600" onclick="removePoLine(${idx})">Hapus</button></td></tr>`).join('')
+    : '<tr><td colspan="4" class="text-center text-gray-400 py-3">Belum ada baris barang.</td></tr>';
+}
+async function savePo(){
+  const supplierId = document.getElementById('po-supplier').value;
+  const poNo = document.getElementById('po-no').value.trim();
+  const errEl = document.getElementById('po-error');
+  errEl.classList.add('hidden');
+  if(!supplierId){ errEl.textContent = 'Supplier wajib dipilih.'; errEl.classList.remove('hidden'); return; }
+  if(!poNo){ errEl.textContent = 'No. PO wajib diisi.'; errEl.classList.remove('hidden'); return; }
+  if(!poLines.length){ errEl.textContent = 'Tambahkan minimal satu baris barang.'; errEl.classList.remove('hidden'); return; }
+  const supplier = suppliers.find(s=>s.id===supplierId);
+  try{
+    const saved = await apiPost('/purchaseOrders', {
+      poNo, supplierId, supplierName: supplier?supplier.name:'-',
+      items: poLines, status: 'sent',
+      notes: document.getElementById('po-notes').value.trim(),
+    });
+    purchaseOrders.unshift(saved);
+    poLines = []; renderPoLinesTable();
+    ['po-no','po-notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('po-supplier').value='';
+    document.getElementById('po-form').classList.add('hidden');
+    toast('PO "'+poNo+'" dikirim ke supplier');
+    renderPurchaseOrders(); renderPurchasingDashboard();
+  }catch(e){ errEl.textContent = e.message || 'Gagal menyimpan PO.'; errEl.classList.remove('hidden'); }
+}
+function renderPurchaseOrders(){
+  const body = document.getElementById('po-body');
+  if(!body) return;
+  body.innerHTML = purchaseOrders.length ? purchaseOrders.map(p=>`
+    <tr><td class="font-semibold">${p.poNo||p.id}</td><td>${p.supplierName||'-'}</td><td>${(p.items||[]).length}</td>
+    <td><span class="badge ${poStatusBadge(p.status)}">${poStatusLabel(p.status)}</span></td>
+    <td>${p.createdAt ? new Date(p.createdAt).toLocaleDateString('id-ID') : '-'}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-center text-gray-400 py-4">Belum ada Purchase Order.</td></tr>';
+}
+
+/* --- Invoice --- */
+function toggleInvoiceForm(){
+  document.getElementById('invoice-form').classList.toggle('hidden');
+  fillInvoiceFormSelects();
+}
+function fillInvoiceFormSelects(){
+  const sel = document.getElementById('inv-po');
+  if(sel) sel.innerHTML = '<option value="">— Pilih PO —</option>' + purchaseOrders.map(p=>`<option value="${p.id}">${p.poNo||p.id} — ${p.supplierName||''}</option>`).join('');
+}
+async function saveInvoice(){
+  const purchaseOrderId = document.getElementById('inv-po').value;
+  const invoiceNo = document.getElementById('inv-no').value.trim();
+  const amount = document.getElementById('inv-amount').value;
+  const errEl = document.getElementById('inv-error');
+  errEl.classList.add('hidden');
+  if(!purchaseOrderId || !invoiceNo || !amount){ errEl.textContent = 'PO, no. invoice, dan jumlah wajib diisi.'; errEl.classList.remove('hidden'); return; }
+  try{
+    const saved = await apiPost('/purchaseInvoices', { purchaseOrderId, invoiceNo, amount, notes: document.getElementById('inv-notes').value.trim() });
+    purchaseInvoices.unshift(saved);
+    ['inv-no','inv-amount','inv-notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('inv-po').value='';
+    document.getElementById('invoice-form').classList.add('hidden');
+    toast('Invoice "'+invoiceNo+'" tercatat, status: Menunggu Verifikasi');
+    renderPurchaseInvoices(); renderPurchasingDashboard();
+  }catch(e){ errEl.textContent = e.message || 'Gagal menyimpan invoice.'; errEl.classList.remove('hidden'); }
+}
+function invMatchLabel(s){ return {pending:'Menunggu Verifikasi', matched:'Matched', discrepancy:'Discrepancy'}[s] || s; }
+function invMatchBadge(s){ return {pending:'b-amber', matched:'b-green', discrepancy:'b-red'}[s] || 'b-gray'; }
+function renderPurchaseInvoices(){
+  const body = document.getElementById('invoice-body');
+  if(!body) return;
+  body.innerHTML = purchaseInvoices.length ? purchaseInvoices.map(i=>`
+    <tr><td class="font-semibold">${i.invoiceNo}</td><td>${(purchaseOrders.find(p=>p.id===i.purchaseOrderId)||{}).poNo || i.purchaseOrderId}</td>
+    <td>Rp ${Number(i.amount).toLocaleString('id-ID')}</td>
+    <td><span class="badge ${invMatchBadge(i.matchStatus)}" title="${i.matchNote||''}">${invMatchLabel(i.matchStatus)}</span></td>
+    <td>${i.paymentStatus==='unpaid'?'Belum Dibayar':'Dibayar'}</td>
+    <td class="text-right">${i.matchStatus==='pending' ? `<button class="text-[11px] font-bold text-blue-600" onclick="verifyInvoice('${i.id}')">Verifikasi</button>` : ''}</td></tr>`).join('')
+    : '<tr><td colspan="6" class="text-center text-gray-400 py-4">Belum ada invoice.</td></tr>';
+}
+async function verifyInvoice(id){
+  try{
+    const saved = await apiPut('/purchaseInvoices/'+id, { action: 'verify' });
+    const idx = purchaseInvoices.findIndex(i=>i.id===id);
+    if(idx!==-1) purchaseInvoices[idx] = saved;
+    toast(saved.matchStatus==='matched' ? 'Invoice cocok (matched) dengan barang diterima' : 'Invoice tidak cocok — ditandai discrepancy: '+(saved.matchNote||''));
+    renderPurchaseInvoices(); renderPurchasingDashboard();
+  }catch(e){ toast(e.message || 'Gagal memverifikasi invoice'); }
+}
+
+/* ===================== MAINTENANCE (role baru, Okt 2026) ===================== */
+function mShow(name){
+  document.querySelectorAll('#role-maintenance .screen').forEach(s=>s.classList.remove('active'));
+  document.querySelector(`#role-maintenance .screen[data-m="${name}"]`).classList.add('active');
+  document.querySelectorAll('#role-maintenance .sidebar button').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`#role-maintenance .sidebar button[data-navm="${name}"]`).classList.add('active');
+  if(name==='damage') fillDamageFormSelects();
+  if(name==='wo') fillMwoFormSelects();
+}
+function renderMaintenanceDashboard(){
+  const elA = document.getElementById('m-stat-assets'); if(elA) elA.textContent = assets.length;
+  const pending = damageReports.filter(d=>d.status==='Menunggu');
+  const elP = document.getElementById('m-stat-pendingdamage'); if(elP) elP.textContent = pending.length;
+  const active = maintenanceWorkOrders.filter(w=>['assigned','in_progress','submitted'].includes(w.status));
+  const elW = document.getElementById('m-stat-activewo'); if(elW) elW.textContent = active.length;
+  const now = new Date();
+  const done = maintenanceWorkOrders.filter(w=>w.status==='approved' && w.closedAt && new Date(w.closedAt).getMonth()===now.getMonth() && new Date(w.closedAt).getFullYear()===now.getFullYear());
+  const elD = document.getElementById('m-stat-donewo'); if(elD) elD.textContent = done.length;
+  const body = document.getElementById('m-dash-damage-body');
+  if(body){
+    const recent = damageReports.slice(0,8);
+    body.innerHTML = recent.length ? recent.map(d=>`
+      <tr><td>${d.assetName||'-'}</td><td>${d.description}</td><td><span class="badge ${dmgSeverityBadge(d.severity)}">${dmgSeverityLabel(d.severity)}</span></td><td><span class="badge ${dmgStatusBadge(d.status)}">${d.status}</span></td></tr>`).join('')
+      : '<tr><td colspan="4" class="text-center text-gray-400 py-4">Belum ada laporan kerusakan.</td></tr>';
+  }
+}
+function dmgSeverityLabel(s){ return {tinggi:'Tinggi', sedang:'Sedang', rendah:'Rendah'}[s] || s || '-'; }
+function dmgSeverityBadge(s){ return {tinggi:'b-red', sedang:'b-amber', rendah:'b-gray'}[s] || 'b-gray'; }
+function dmgStatusBadge(s){ return {'Menunggu':'b-amber','Diperiksa':'b-blue','Menunggu Persetujuan':'b-amber','Disetujui':'b-green','Ditolak':'b-red','Selesai':'b-green'}[s] || 'b-gray'; }
+
+/* --- Aset --- */
+function toggleAssetForm(){ document.getElementById('asset-form').classList.toggle('hidden'); }
+function renderAssets(){
+  const body = document.getElementById('asset-body');
+  if(!body) return;
+  body.innerHTML = assets.length ? assets.map(a=>`
+    <tr><td class="font-semibold">${a.name}</td><td>${a.code||'-'}</td><td>${a.location||'-'}</td><td>${a.category||'-'}</td>
+    <td class="text-right"><button class="text-[11px] font-bold text-red-600" onclick="deleteAsset('${a.id}')">Hapus</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-center text-gray-400 py-4">Belum ada aset.</td></tr>';
+}
+async function saveAsset(){
+  const name = document.getElementById('asset-name').value.trim();
+  if(!name){ toast('Nama aset wajib diisi.'); return; }
+  try{
+    const saved = await apiPost('/assets', {
+      name, code: document.getElementById('asset-code').value.trim(),
+      location: document.getElementById('asset-location').value.trim(),
+      category: document.getElementById('asset-category').value.trim(),
+    });
+    assets.unshift(saved);
+    ['asset-name','asset-code','asset-location','asset-category'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('asset-form').classList.add('hidden');
+    toast('Aset "'+name+'" ditambahkan'); renderAssets();
+  }catch(e){ toast(e.message || 'Gagal menyimpan aset.'); }
+}
+async function deleteAsset(id){
+  const a = assets.find(x=>x.id===id);
+  if(!confirm('Hapus aset "'+(a?a.name:id)+'"?')) return;
+  try{ await apiDelete('/assets/'+id); assets = assets.filter(x=>x.id!==id); toast('Aset dihapus'); renderAssets(); }
+  catch(e){ toast(e.message || 'Gagal menghapus aset'); }
+}
+
+/* --- Laporan Kerusakan --- */
+function toggleDamageForm(){ document.getElementById('damage-form').classList.toggle('hidden'); fillDamageFormSelects(); }
+function fillDamageFormSelects(){
+  const sel = document.getElementById('dmg-asset');
+  if(sel) sel.innerHTML = '<option value="">— Tidak terkait aset tertentu —</option>' + assets.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+}
+async function saveDamageReport(){
+  const description = document.getElementById('dmg-desc').value.trim();
+  if(!description){ toast('Deskripsi kerusakan wajib diisi.'); return; }
+  const assetId = document.getElementById('dmg-asset').value;
+  const asset = assets.find(a=>a.id===assetId);
+  try{
+    const saved = await apiPost('/damageReports', {
+      assetId: assetId || null, assetName: asset?asset.name:'-',
+      description, severity: document.getElementById('dmg-severity').value,
+    });
+    damageReports.unshift(saved);
+    document.getElementById('dmg-desc').value='';
+    document.getElementById('damage-form').classList.add('hidden');
+    toast('Laporan kerusakan terkirim'); renderDamageReports(); renderMaintenanceDashboard();
+  }catch(e){ toast(e.message || 'Gagal mengirim laporan.'); }
+}
+async function damageAction(id, action){
+  try{
+    const saved = await apiPut('/damageReports/'+id, { action });
+    const idx = damageReports.findIndex(d=>d.id===id);
+    if(idx!==-1) damageReports[idx] = saved;
+    toast('Laporan diperbarui: '+saved.status);
+    renderDamageReports(); renderMaintenanceDashboard();
+  }catch(e){ toast(e.message || 'Gagal memperbarui laporan.'); }
+}
+function renderDamageReports(){
+  const body = document.getElementById('damage-body');
+  if(!body) return;
+  body.innerHTML = damageReports.length ? damageReports.map(d=>`
+    <tr><td>${d.assetName||'-'}</td><td>${d.description}</td>
+    <td><span class="badge ${dmgSeverityBadge(d.severity)}">${dmgSeverityLabel(d.severity)}</span></td>
+    <td><span class="badge ${dmgStatusBadge(d.status)}">${d.status}</span></td>
+    <td class="text-right">${d.status==='Menunggu' ? `
+      <button class="text-[11px] font-bold text-blue-600 mr-2" onclick="damageAction('${d.id}','periksa')">Periksa</button>
+      <button class="text-[11px] font-bold text-red-600" onclick="damageAction('${d.id}','tolak')">Tolak</button>` :
+      d.status==='Diperiksa' ? `<button class="text-[11px] font-bold text-amber-600" onclick="damageEstimate('${d.id}')">Beri Estimasi</button>` :
+      d.status==='Menunggu Persetujuan' ? `<button class="text-[11px] font-bold text-green-600" onclick="openMwoFromDamage('${d.id}')">Buat Work Order</button>` :
+      '-'}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-center text-gray-400 py-4">Belum ada laporan kerusakan.</td></tr>';
+}
+async function damageEstimate(id){
+  const val = prompt('Estimasi biaya perbaikan (Rp):', '0');
+  if(val===null) return;
+  try{
+    const saved = await apiPut('/damageReports/'+id, { action: 'estimasi', estimasiBiaya: Number(val)||0 });
+    const idx = damageReports.findIndex(d=>d.id===id);
+    if(idx!==-1) damageReports[idx] = saved;
+    toast('Estimasi biaya disimpan, menunggu persetujuan work order');
+    renderDamageReports(); renderMaintenanceDashboard();
+  }catch(e){ toast(e.message || 'Gagal menyimpan estimasi.'); }
+}
+function openMwoFromDamage(damageReportId){
+  mShow('wo');
+  document.getElementById('mwo-form').classList.remove('hidden');
+  fillMwoFormSelects();
+  const d = damageReports.find(x=>x.id===damageReportId);
+  if(d){
+    document.getElementById('mwo-asset').value = d.assetId || '';
+    document.getElementById('mwo-damage').value = damageReportId;
+    document.getElementById('mwo-cost').value = d.estimasiBiaya || '';
+  }
+}
+
+/* --- Work Order Maintenance --- */
+function toggleMwoForm(){ document.getElementById('mwo-form').classList.toggle('hidden'); fillMwoFormSelects(); }
+function fillMwoFormSelects(){
+  const assetSel = document.getElementById('mwo-asset');
+  if(assetSel) assetSel.innerHTML = '<option value="">— Pilih aset —</option>' + assets.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  const dmgSel = document.getElementById('mwo-damage');
+  if(dmgSel){
+    const linkable = damageReports.filter(d=>['Diperiksa','Menunggu Persetujuan'].includes(d.status));
+    dmgSel.innerHTML = '<option value="">— Tidak terkait —</option>' + linkable.map(d=>`<option value="${d.id}">${d.id} — ${d.description.slice(0,40)}</option>`).join('');
+  }
+}
+async function saveMwo(){
+  const assetId = document.getElementById('mwo-asset').value;
+  if(!assetId){ toast('Aset wajib dipilih.'); return; }
+  const asset = assets.find(a=>a.id===assetId);
+  const damageReportId = document.getElementById('mwo-damage').value || null;
+  try{
+    const saved = await apiPost('/maintenanceWorkOrders', {
+      assetId, assetName: asset?asset.name:'-', damageReportId,
+      assignedTo: document.getElementById('mwo-assignedto').value.trim() || undefined,
+      estimasiBiaya: document.getElementById('mwo-cost').value,
+      notes: document.getElementById('mwo-notes').value.trim(),
+    });
+    maintenanceWorkOrders.unshift(saved);
+    if(damageReportId){ damageReports = await apiGet('/damageReports'); renderDamageReports(); }
+    ['mwo-assignedto','mwo-cost','mwo-notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('mwo-asset').value=''; document.getElementById('mwo-damage').value='';
+    document.getElementById('mwo-form').classList.add('hidden');
+    toast('Work order maintenance dibuat');
+    renderMaintenanceWorkOrders(); renderMaintenanceDashboard();
+  }catch(e){ toast(e.message || 'Gagal membuat work order.'); }
+}
+function mwoStatusLabel(s){ return {assigned:'Ditugaskan', in_progress:'Dikerjakan', submitted:'Menunggu Review', approved:'Disetujui', cancelled:'Dibatalkan'}[s] || s; }
+function mwoStatusBadge(s){ return {assigned:'b-blue', in_progress:'b-amber', submitted:'b-blue', approved:'b-green', cancelled:'b-gray'}[s] || 'b-gray'; }
+async function mwoAction(id, action){
+  try{
+    const saved = await apiPut('/maintenanceWorkOrders/'+id, { action });
+    const idx = maintenanceWorkOrders.findIndex(w=>w.id===id);
+    if(idx!==-1) maintenanceWorkOrders[idx] = saved;
+    toast('Work order diperbarui: '+mwoStatusLabel(saved.status));
+    renderMaintenanceWorkOrders(); renderMaintenanceDashboard();
+  }catch(e){ toast(e.message || 'Gagal memperbarui work order.'); }
+}
+function renderMaintenanceWorkOrders(){
+  const body = document.getElementById('mwo-body');
+  if(!body) return;
+  body.innerHTML = maintenanceWorkOrders.length ? maintenanceWorkOrders.map(w=>`
+    <tr><td class="font-semibold">${w.assetName||'-'}</td><td>${w.assignedTo||'-'}</td>
+    <td>${(w.materialsUsed||[]).length ? (w.materialsUsed||[]).map(m=>m.itemName+' ('+m.qty+' '+m.unit+')').join(', ') : '-'}</td>
+    <td><span class="badge ${mwoStatusBadge(w.status)}">${mwoStatusLabel(w.status)}</span></td>
+    <td class="text-right">${
+      w.status==='assigned' ? `<button class="text-[11px] font-bold text-blue-600" onclick="mwoAction('${w.id}','start')">Mulai</button>` :
+      w.status==='in_progress' ? `<button class="text-[11px] font-bold text-blue-600" onclick="mwoAction('${w.id}','submit')">Selesai &amp; Ajukan</button>` :
+      w.status==='submitted' ? `<button class="text-[11px] font-bold text-green-600" onclick="mwoAction('${w.id}','approve')">Setujui</button>` : '-'
+    }</td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-center text-gray-400 py-4">Belum ada work order maintenance.</td></tr>';
 }
 
 /* --- Siklus Tanam --- */
@@ -3315,6 +4409,13 @@ async function deleteAdminIncomingReport(id){
 showAuthTab('login');
 showProductTab('produk');
 tryResumeSession(); // kalau sesi login sebelumnya masih berlaku (cookie), langsung masuk tanpa perlu login ulang
+
+function tickWorkerClock(){
+  const el = document.getElementById('worker-clock');
+  if(el) el.textContent = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+}
+tickWorkerClock();
+setInterval(tickWorkerClock, 30000);
 </script>
 </body>
 </html>

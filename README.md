@@ -23,7 +23,7 @@ Aplikasi manajemen budidaya pertanian oleh **Terindo Group** (PT Tetra Jaya Plus
 └── README.md
 ```
 
-- **`public/index.html`** — seluruh aplikasi dalam satu file: layar masuk/daftar, 4 peran pengguna (Pekerja Lapangan, Supervisor, Agronomis, Gudang), dan semua modul. Tidak ada dependency eksternal (CSS Tailwind sudah di-*compile* & di-inline) — hanya memanggil API sendiri (`/api/...`) lewat `fetch()`.
+- **`public/index.html`** — seluruh aplikasi dalam satu file: layar masuk/daftar, 7 peran pengguna (Pekerja Lapangan, Supervisor, Agronomis, Gudang, Admin, **Purchasing**, **Maintenance** — lihat `CATATAN_RILIS_V5.md` untuk detail penambahan Okt 2026), dan semua modul. Tidak ada dependency eksternal (CSS Tailwind sudah di-*compile* & di-inline) — hanya memanggil API sendiri (`/api/...`) lewat `fetch()`.
 - **`server.js`** — melayani `public/`, menyediakan REST API untuk semua modul, menangani login/daftar/keluar berbasis sesi, dan proxy analisis foto AI ke OpenAI (supaya kunci API tidak pernah ada di browser).
 - **`data/db.json`** — "database" aplikasi. Dibuat otomatis dari data contoh (seed) saat server pertama kali dijalankan, lalu berubah mengikuti pemakaian (tambah barang, treatment, rencana kerja, laporan, akun baru, dst). File ini **sudah masuk `.gitignore`** — jangan di-commit, karena berisi data yang akan terus berubah di server produksi.
 
